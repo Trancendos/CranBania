@@ -29,6 +29,8 @@ test("epic and sprint workspace", async () => {
     assert.ok(burndown);
     assert.equal(burndown!.totalPoints, 8);
     assert.equal(burndown!.donePoints, 3);
+    assert.ok(Array.isArray(burndown!.series));
+    assert.ok(burndown!.series.length > 0);
   } finally {
     process.chdir(originalCwd);
     await fs.rm(tmp, { recursive: true, force: true });

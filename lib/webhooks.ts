@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { WebhookConfig, WebhooksFile } from "./types";
+import type { WebhookConfig, WebhookEvent, WebhooksFile } from "./types";
+import type { SlaStatus } from "./types";
 
 function webhooksPath() {
   return path.join(process.cwd(), "data", "webhooks.json");
@@ -14,6 +15,8 @@ async function ensureDataDir() {
   await fs.mkdir(dataDir(), { recursive: true });
 }
 
+const DEFAULT_EVENTS: WebhookEvent[] = ["card.in_progress", "card.sla_breach"];
+
 export async function readWebhooks(): Promise<WebhookConfig[]> {
   await ensureDataDir();
   const fromEnv = process.env.CRANBANIA_WEBHOOK_URLS;
@@ -22,7 +25,7 @@ export async function readWebhooks(): Promise<WebhookConfig[]> {
         id: `env-${i}`,
         url: url.trim(),
         enabled: true,
-        events: ["card.in_progress" as const],
+        events: DEFAULT_EVENTS,
       }))
     : [];
 
@@ -42,17 +45,23 @@ export async function writeWebhooks(webhooks: WebhookConfig[]): Promise<void> {
   await fs.writeFile(webhooksPath(), JSON.stringify(file, null, 2), "utf-8");
 }
 
+export interface WebhookCardPayload {
+  id: string;
+  title: string;
+  description: string;
+  assignee?: string;
+  tags: string[];
+  cardType?: string;
+  priority?: string;
+  slaDueAt?: string;
+  worktree?: { path: string; branch: string };
+}
+
 export interface WebhookPayload {
-  event: "card.in_progress";
+  event: WebhookEvent;
   at: string;
-  card: {
-    id: string;
-    title: string;
-    description: string;
-    assignee?: string;
-    tags: string[];
-    worktree?: { path: string; branch: string };
-  };
+  card: WebhookCardPayload;
+  sla?: SlaStatus;
 }
 
 export interface WebhookResult {
@@ -76,7 +85,8 @@ export async function dispatchWebhooks(
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
-          "User-Agent": "CranBania/0.2",
+          "User-Agent": "CranBania/0.4",
+          "X-CranBania-Event": payload.event,
         };
         if (webhook.secret) {
           headers["X-CranBania-Secret"] = webhook.secret;

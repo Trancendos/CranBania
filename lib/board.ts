@@ -18,6 +18,8 @@ import {
   migrateCard,
 } from "./types";
 import { computeSlaStatus } from "./sla";
+import { runSlaBreachCheckForCard } from "./sla-monitor";
+import { getActiveSprint } from "./workspace";
 
 function boardPath() {
   return path.join(process.cwd(), "data", "board.json");
@@ -101,6 +103,7 @@ export interface CreateCardInput {
   sprintId?: string;
   prince2Stage?: Prince2Stage;
   slaResponseHours?: number;
+  slaDueAt?: string;
   storyPoints?: number;
 }
 
@@ -114,6 +117,26 @@ export async function createCard(input: CreateCardInput): Promise<Card> {
   const now = new Date().toISOString();
   const actor = input.actor ?? "human";
   const cardType = input.cardType ?? "task";
+  const activeSprint = await getActiveSprint();
+  const sprintId = input.sprintId ?? activeSprint?.id;
+  const journal: JournalEntry[] = [
+    createJournalEntry(
+      "created",
+      `Card created in ${columnId} (${cardType})`,
+      actor,
+      { columnId, title: input.title, cardType },
+    ),
+  ];
+  if (sprintId && !input.sprintId && activeSprint) {
+    journal.push(
+      createJournalEntry(
+        "updated",
+        `Auto-assigned to sprint: ${activeSprint.name}`,
+        "system",
+        { sprintId: activeSprint.id },
+      ),
+    );
+  }
   const card: Card = migrateCard({
     id: randomUUID(),
     title: input.title,
@@ -125,18 +148,12 @@ export async function createCard(input: CreateCardInput): Promise<Card> {
     cardType,
     priority: input.priority,
     epicId: input.epicId,
-    sprintId: input.sprintId,
+    sprintId,
     prince2Stage: input.prince2Stage,
     slaResponseHours: input.slaResponseHours,
+    slaDueAt: input.slaDueAt,
     storyPoints: input.storyPoints,
-    journal: [
-      createJournalEntry(
-        "created",
-        `Card created in ${columnId} (${cardType})`,
-        actor,
-        { columnId, title: input.title, cardType },
-      ),
-    ],
+    journal,
     codeChanges: [],
     createdAt: now,
     updatedAt: now,
@@ -144,7 +161,8 @@ export async function createCard(input: CreateCardInput): Promise<Card> {
 
   board.cards.push(card);
   await writeBoard(board);
-  return card;
+  await runSlaBreachCheckForCard(card.id);
+  return (await getCard(card.id)) ?? card;
 }
 
 export interface UpdateCardInput {
@@ -281,6 +299,8 @@ async function handleInProgressSideEffects(
       description: updated.description,
       assignee: updated.assignee,
       tags: updated.tags,
+      cardType: updated.cardType,
+      priority: updated.priority,
       worktree: updated.worktree
         ? { path: updated.worktree.path, branch: updated.worktree.branch }
         : undefined,
@@ -386,25 +406,10 @@ export async function moveCard(
     };
   }
 
-  const sla = computeSlaStatus(updated);
-  if (sla.breached && !updated.journal.some((j) => j.type === "sla" && j.message.includes("breached"))) {
-    updated = {
-      ...updated,
-      journal: [
-        ...updated.journal,
-        createJournalEntry(
-          "sla",
-          `SLA breached (due ${updated.slaDueAt})`,
-          "system",
-          { sla },
-        ),
-      ],
-    };
-  }
-
   board.cards[index] = updated;
   await writeBoard(board);
-  return updated;
+  await runSlaBreachCheckForCard(id);
+  return (await getCard(id)) ?? updated;
 }
 
 export async function addComment(

@@ -362,7 +362,10 @@ export default function KanbanBoard() {
         <code className="text-[var(--accent)]">POST /api/cards/:id/code-changes</code>,{" "}
         <code className="text-[var(--accent)]">GET /api/cards/:id/journal</code>
         {" · "}
-        Webhooks fire on <code className="text-[var(--accent)]">in_progress</code>
+        Webhooks: <code className="text-[var(--accent)]">card.in_progress</code>,{" "}
+        <code className="text-[var(--accent)]">card.sla_breach</code>
+        {" · "}
+        <code className="text-[var(--accent)]">POST /api/itsm/sla/check</code>
       </footer>
     </div>
   );

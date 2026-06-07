@@ -38,14 +38,21 @@ Incidents/changes get automatic SLA due dates. Journal records breaches.
 | `GET /api/backlog` | Backlog queue |
 | `GET/POST /api/epics` | Agile epics |
 | `GET/POST /api/sprints` | Sprints + burndown |
-| `GET /api/itsm/incidents` | Free incident queue |
+| `GET /api/sprints/:id/burndown` | Sprint burndown (story points + chart series) |
+| `GET /api/itsm/incidents` | Free incident queue (API) |
+| `GET /incidents` | Incident queue dashboard (UI) |
+| `POST /api/itsm/sla/check` | Cron SLA breach scan + webhooks |
 | `GET /api/itsm/changes` | Change records |
 | `GET /api/itsm/sla` | SLA report |
 | `GET /api/governance/prince2` | Stage overview |
 | `GET /api/export` | Full backup |
 | `POST /api/import` | Restore merge/replace |
 
-Plus all v0.2 routes: journal, comments, code-changes, webhooks, MCP.
+Plus all v0.2 routes: journal, comments, code-changes, webhooks (`card.in_progress`, `card.sla_breach`), MCP.
+
+## Automation (free)
+
+See [docs/automation-recipes.md](./docs/automation-recipes.md) for GitHub Actions SLA cron, n8n webhooks, and agent dispatch patterns. **Node/npm only** — Maven/Gradle are not used.
 
 ## MCP
 

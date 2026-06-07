@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import type { Epic, Sprint, SprintStatus, WorkspaceData } from "./types";
+import type { Card, Epic, Sprint, SprintStatus, WorkspaceData } from "./types";
 
 function workspacePath() {
   return path.join(process.cwd(), "data", "workspace.json");
@@ -103,9 +103,18 @@ export async function activateSprint(id: string): Promise<Sprint | null> {
   return sprint;
 }
 
+export interface BurndownPoint {
+  date: string;
+  remaining: number;
+  ideal: number;
+  completed: number;
+}
+
 export interface SprintBurndown {
   sprintId: string;
   sprintName: string;
+  startDate: string;
+  endDate: string;
   totalCards: number;
   doneCards: number;
   remainingCards: number;
@@ -113,11 +122,28 @@ export interface SprintBurndown {
   donePoints: number;
   remainingPoints: number;
   byColumn: Record<string, number>;
+  series: BurndownPoint[];
+}
+
+function dateRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const cur = new Date(`${start}T00:00:00.000Z`);
+  const last = new Date(`${end}T00:00:00.000Z`);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const cap = last < today ? last : today;
+
+  while (cur <= cap) {
+    dates.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  if (dates.length === 0) dates.push(start);
+  return dates;
 }
 
 export async function getSprintBurndown(
   sprintId: string,
-  cards: { sprintId?: string; columnId: string; storyPoints?: number }[],
+  cards: Card[],
 ): Promise<SprintBurndown | null> {
   const sprint = (await readWorkspace()).sprints.find((s) => s.id === sprintId);
   if (!sprint) return null;
@@ -129,12 +155,46 @@ export async function getSprintBurndown(
     byColumn[c.columnId] = (byColumn[c.columnId] ?? 0) + 1;
   }
 
-  const totalPoints = inSprint.reduce((s, c) => s + (c.storyPoints ?? 1), 0);
-  const donePoints = done.reduce((s, c) => s + (c.storyPoints ?? 1), 0);
+  const points = (c: Card) => c.storyPoints ?? 1;
+  const totalPoints = inSprint.reduce((s, c) => s + points(c), 0);
+  const donePoints = done.reduce((s, c) => s + points(c), 0);
+
+  const days = dateRange(sprint.startDate, sprint.endDate);
+  const dayCount = Math.max(
+    1,
+    Math.ceil(
+      (new Date(`${sprint.endDate}T00:00:00.000Z`).getTime() -
+        new Date(`${sprint.startDate}T00:00:00.000Z`).getTime()) /
+        86400_000,
+    ) + 1,
+  );
+
+  const series: BurndownPoint[] = days.map((date, idx) => {
+    const endOfDay = new Date(`${date}T23:59:59.999Z`).getTime();
+    const completed = inSprint
+      .filter((c) => {
+        if (c.columnId !== "done") return false;
+        const resolved = c.resolvedAt
+          ? new Date(c.resolvedAt).getTime()
+          : new Date(c.updatedAt).getTime();
+        return resolved <= endOfDay;
+      })
+      .reduce((s, c) => s + points(c), 0);
+
+    const remaining = Math.max(0, totalPoints - completed);
+    const ideal = Math.max(
+      0,
+      totalPoints - (totalPoints * (idx + 1)) / dayCount,
+    );
+
+    return { date, remaining, ideal: Math.round(ideal * 10) / 10, completed };
+  });
 
   return {
     sprintId,
     sprintName: sprint.name,
+    startDate: sprint.startDate,
+    endDate: sprint.endDate,
     totalCards: inSprint.length,
     doneCards: done.length,
     remainingCards: inSprint.length - done.length,
@@ -142,5 +202,6 @@ export async function getSprintBurndown(
     donePoints,
     remainingPoints: totalPoints - donePoints,
     byColumn,
+    series,
   };
 }

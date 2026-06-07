@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import BurndownChart from "@/components/BurndownChart";
 import type { Epic, Sprint } from "@/lib/types";
 
 interface WorkspaceMeta {
@@ -172,6 +173,10 @@ export default function WorkspaceBar({
           ))}
         </div>
       ) : null}
+
+      <div className="mt-4">
+        <BurndownChart sprintId={sprintFilter ?? meta?.activeSprint?.id ?? null} />
+      </div>
     </section>
   );
 }
