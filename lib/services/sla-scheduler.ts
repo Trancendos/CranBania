@@ -1,9 +1,7 @@
 /**
  * Adaptive SLA breach poller — no GitHub Actions required.
- * Run via: npm run sla:poll | CRANBANIA_SLA_POLL_INTERVAL_MS with next start | Forgejo cron curl
+ * Run via: npm run sla:poll | npm run start:full | Forgejo/Woodpecker cron curl
  */
-
-import { runSlaBreachChecks } from "../sla-monitor";
 
 export interface SchedulerConfig {
   minIntervalMs: number;
@@ -13,6 +11,7 @@ export interface SchedulerConfig {
 
 export interface SchedulerTickResult {
   notified: number;
+  warningsNotified: number;
   nextIntervalMs: number;
   checkedAt: string;
 }
@@ -40,16 +39,18 @@ export function getSchedulerStatus() {
     lastTick,
     tickCount,
     config: getSchedulerConfig(),
-    mode: process.env.CRANBANIA_SLA_POLL_INTERVAL_MS
-      ? "in-process or sidecar"
-      : "manual or external cron only",
+    mode: running
+      ? "sidecar poller active"
+      : "run npm run sla:poll or npm run start:full",
   };
 }
 
 /** One SLA scan; adapts next interval based on activity. */
 export async function runSlaSchedulerTick(): Promise<SchedulerTickResult> {
+  const { runSlaChecks } = await import("../sla-monitor");
   const cfg = getSchedulerConfig();
-  const notified = await runSlaBreachChecks();
+  const { breaches, warnings } = await runSlaChecks();
+  const notified = breaches + warnings;
 
   if (notified > 0) {
     currentIntervalMs = cfg.minIntervalMs;
@@ -61,7 +62,8 @@ export async function runSlaSchedulerTick(): Promise<SchedulerTickResult> {
   }
 
   lastTick = {
-    notified,
+    notified: breaches,
+    warningsNotified: warnings,
     nextIntervalMs: currentIntervalMs,
     checkedAt: new Date().toISOString(),
   };

@@ -15,7 +15,11 @@ async function ensureDataDir() {
   await fs.mkdir(dataDir(), { recursive: true });
 }
 
-const DEFAULT_EVENTS: WebhookEvent[] = ["card.in_progress", "card.sla_breach"];
+const DEFAULT_EVENTS: WebhookEvent[] = [
+  "card.in_progress",
+  "card.sla_warning",
+  "card.sla_breach",
+];
 
 export async function readWebhooks(): Promise<WebhookConfig[]> {
   await ensureDataDir();
@@ -85,7 +89,7 @@ export async function dispatchWebhooks(
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
-          "User-Agent": "CranBania/0.4",
+          "User-Agent": "CranBania/0.5",
           "X-CranBania-Event": payload.event,
         };
         if (webhook.secret) {

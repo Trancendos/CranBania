@@ -20,6 +20,8 @@ import {
   updateCard,
 } from "../lib/board";
 import { exportWorkspace } from "../lib/export";
+import { buildAutomationStatus } from "../lib/automation/status";
+import { runSlaChecks } from "../lib/sla-monitor";
 import { createEpic, createSprint } from "../lib/workspace";
 import { CARD_TYPES, COLUMN_IDS, type CardType, type ColumnId } from "../lib/types";
 
@@ -27,7 +29,7 @@ const columnIdSchema = z.enum(COLUMN_IDS as [string, ...string[]]);
 
 const server = new McpServer({
   name: "cranbania",
-  version: "0.4.1",
+  version: "0.5.0",
 });
 
 server.tool(
@@ -333,6 +335,44 @@ server.tool(
     const overview = await getPrince2Overview();
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ overview }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "get_automation_status",
+  "Automation health: scheduler, webhooks, Forgejo/Woodpecker integration config",
+  {},
+  async () => {
+    const status = await buildAutomationStatus();
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(status, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "run_sla_check",
+  "Scan all cards for SLA warnings/breaches and fire webhooks (same as POST /api/itsm/sla/check)",
+  {},
+  async () => {
+    const { breaches, warnings } = await runSlaChecks();
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              ok: true,
+              cardsNotified: breaches,
+              warningsNotified: warnings,
+              checkedAt: new Date().toISOString(),
+            },
+            null,
+            2,
+          ),
+        },
+      ],
     };
   },
 );

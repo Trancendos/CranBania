@@ -1,5 +1,5 @@
 # Forgejo Actions (self-hosted) — optional external SLA cron.
-# Preferred: npm run sla:poll sidecar or CRANBANIA_SLA_POLL_INTERVAL_MS with next start.
+# Preferred: npm run sla:poll sidecar or npm run start:full.
 name: CranBania SLA check
 
 on:

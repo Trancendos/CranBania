@@ -1,13 +1,14 @@
 import { readBoard, writeBoard } from "./board";
 import { createJournalEntry } from "./journal";
-import { computeSlaStatus } from "./sla";
+import { computeSlaStatus, isSlaWarning } from "./sla";
 import { emitCardEvent } from "./services/event-bus";
 import type { Card } from "./types";
+import type { WebhookEvent } from "./types";
 
-async function notifySlaBreach(card: Card): Promise<Card> {
+function buildSlaPayload(card: Card, event: WebhookEvent) {
   const sla = computeSlaStatus(card);
-  const payload = {
-    event: "card.sla_breach" as const,
+  return {
+    event,
     at: new Date().toISOString(),
     card: {
       id: card.id,
@@ -20,22 +21,16 @@ async function notifySlaBreach(card: Card): Promise<Card> {
       slaDueAt: card.slaDueAt,
     },
     sla,
-  };
+  } as const;
+}
 
-  const results = await emitCardEvent(payload);
-  let updated: Card = {
-    ...card,
-    slaBreachNotifiedAt: new Date().toISOString(),
-    journal: [
-      ...card.journal,
-      createJournalEntry(
-        "sla",
-        `SLA breached (due ${card.slaDueAt})`,
-        "system",
-        { sla },
-      ),
-    ],
-  };
+async function appendWebhookJournal(
+  card: Card,
+  results: Awaited<ReturnType<typeof emitCardEvent>>,
+  event: WebhookEvent,
+  emptyMessage: string,
+): Promise<Card> {
+  let updated = card;
 
   for (const result of results) {
     updated = {
@@ -45,10 +40,10 @@ async function notifySlaBreach(card: Card): Promise<Card> {
         createJournalEntry(
           "webhook",
           result.ok
-            ? `SLA breach webhook → ${result.url} (${result.status})`
-            : `SLA breach webhook failed → ${result.url}: ${result.error ?? result.status}`,
+            ? `${event} webhook → ${result.url} (${result.status})`
+            : `${event} webhook failed → ${result.url}: ${result.error ?? result.status}`,
           "system",
-          { result, event: "card.sla_breach" },
+          { result, event },
         ),
       ],
     };
@@ -59,11 +54,7 @@ async function notifySlaBreach(card: Card): Promise<Card> {
       ...updated,
       journal: [
         ...updated.journal,
-        createJournalEntry(
-          "webhook",
-          "No webhooks configured for card.sla_breach",
-          "system",
-        ),
+        createJournalEntry("webhook", emptyMessage, "system"),
       ],
     };
   }
@@ -71,25 +62,100 @@ async function notifySlaBreach(card: Card): Promise<Card> {
   return updated;
 }
 
-/** Scan all cards and fire SLA breach webhooks once per card. Returns cards updated. */
-export async function runSlaBreachChecks(): Promise<number> {
+async function notifySlaWarning(card: Card): Promise<Card> {
+  const payload = buildSlaPayload(card, "card.sla_warning");
+  const results = await emitCardEvent(payload);
+
+  let updated: Card = {
+    ...card,
+    slaWarningNotifiedAt: new Date().toISOString(),
+    journal: [
+      ...card.journal,
+      createJournalEntry(
+        "sla",
+        `SLA warning (${payload.sla.remainingMs ?? 0}ms remaining, due ${card.slaDueAt})`,
+        "system",
+        { sla: payload.sla },
+      ),
+    ],
+  };
+
+  updated = await appendWebhookJournal(
+    updated,
+    results,
+    "card.sla_warning",
+    "No webhooks configured for card.sla_warning",
+  );
+
+  return updated;
+}
+
+async function notifySlaBreach(card: Card): Promise<Card> {
+  const payload = buildSlaPayload(card, "card.sla_breach");
+  const results = await emitCardEvent(payload);
+
+  let updated: Card = {
+    ...card,
+    slaBreachNotifiedAt: new Date().toISOString(),
+    journal: [
+      ...card.journal,
+      createJournalEntry(
+        "sla",
+        `SLA breached (due ${card.slaDueAt})`,
+        "system",
+        { sla: payload.sla },
+      ),
+    ],
+  };
+
+  updated = await appendWebhookJournal(
+    updated,
+    results,
+    "card.sla_breach",
+    "No webhooks configured for card.sla_breach",
+  );
+
+  return updated;
+}
+
+export interface SlaCheckResult {
+  breaches: number;
+  warnings: number;
+}
+
+/** Scan all cards for SLA warnings and breaches; dispatch webhooks once per card. */
+export async function runSlaChecks(): Promise<SlaCheckResult> {
   const board = await readBoard();
-  let updatedCount = 0;
+  let breaches = 0;
+  let warnings = 0;
 
   for (let i = 0; i < board.cards.length; i++) {
     const card = board.cards[i];
     const sla = computeSlaStatus(card);
-    if (!sla.breached || card.slaBreachNotifiedAt) continue;
 
-    board.cards[i] = await notifySlaBreach(card);
-    updatedCount++;
+    if (sla.breached && !card.slaBreachNotifiedAt) {
+      board.cards[i] = await notifySlaBreach(card);
+      breaches++;
+      continue;
+    }
+
+    if (!sla.breached && !card.slaWarningNotifiedAt && isSlaWarning(card)) {
+      board.cards[i] = await notifySlaWarning(card);
+      warnings++;
+    }
   }
 
-  if (updatedCount > 0) {
+  if (breaches + warnings > 0) {
     await writeBoard(board);
   }
 
-  return updatedCount;
+  return { breaches, warnings };
+}
+
+/** Scan all cards and fire SLA breach webhooks once per card. Returns cards updated. */
+export async function runSlaBreachChecks(): Promise<number> {
+  const { breaches } = await runSlaChecks();
+  return breaches;
 }
 
 export async function runSlaBreachCheckForCard(cardId: string): Promise<Card | null> {

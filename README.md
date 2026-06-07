@@ -49,11 +49,22 @@ Incidents/changes get automatic SLA due dates. Journal records breaches.
 | `GET /api/export` | Full backup |
 | `POST /api/import` | Restore merge/replace |
 
-Plus all v0.2 routes: journal, comments, code-changes, webhooks (`card.in_progress`, `card.sla_breach`), MCP.
+Plus all v0.2 routes: journal, comments, code-changes, webhooks (`card.in_progress`, `card.sla_warning`, `card.sla_breach`), MCP.
+
+## Production auth
+
+Set `CRANBANIA_API_KEY` to require a bearer token on all mutating `/api/*` routes. Set `CRANBANIA_CRON_SECRET` for `POST /api/itsm/sla/check`.
+
+```bash
+curl -X POST http://localhost:3000/api/cards \
+  -H "Authorization: Bearer $CRANBANIA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Agent task","cardType":"task"}'
+```
 
 ## Automation (free)
 
-See [docs/automation-recipes.md](./docs/automation-recipes.md) — **built-in `npm run sla:poll`**, Forgejo Actions, n8n, systemd. GitHub Actions optional, not required.
+See [docs/automation-recipes.md](./docs/automation-recipes.md) — **built-in `npm run sla:poll`**, `npm run start:full`, Forgejo Actions, Woodpecker, n8n, systemd. GitHub Actions optional, not required.
 
 Architecture and Convex-skill mapping: [docs/architecture.md](./docs/architecture.md).
 
@@ -74,6 +85,7 @@ npm run lint
 npm run build
 npm run mcp
 npm run sla:poll
+npm run start:full
 ```
 
 MIT · self-hosted · no SaaS required

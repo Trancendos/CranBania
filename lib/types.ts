@@ -102,6 +102,8 @@ export interface Card {
   slaDueAt?: string;
   /** Set when SLA breach webhook has been sent (once per breach) */
   slaBreachNotifiedAt?: string;
+  /** Set when SLA warning webhook has been sent (once per card) */
+  slaWarningNotifiedAt?: string;
   resolvedAt?: string;
   storyPoints?: number;
   journal: JournalEntry[];
@@ -129,7 +131,10 @@ export interface WorkspaceData {
   sprints: Sprint[];
 }
 
-export type WebhookEvent = "card.in_progress" | "card.sla_breach";
+export type WebhookEvent =
+  | "card.in_progress"
+  | "card.sla_warning"
+  | "card.sla_breach";
 
 export interface WebhookConfig {
   id: string;
@@ -215,6 +220,7 @@ export function migrateCard(raw: Partial<Card> & { id: string }): Card {
           ).toISOString()
         : undefined),
     slaBreachNotifiedAt: raw.slaBreachNotifiedAt,
+    slaWarningNotifiedAt: raw.slaWarningNotifiedAt,
     resolvedAt: raw.resolvedAt,
     storyPoints: raw.storyPoints,
     journal: raw.journal ?? [],

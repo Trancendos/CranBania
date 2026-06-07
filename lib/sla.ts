@@ -18,6 +18,29 @@ export function computeSlaStatus(card: Card, now = Date.now()): SlaStatus {
   };
 }
 
+/** Percent of SLA window remaining that triggers card.sla_warning (default 25). */
+export function getSlaWarningThresholdPercent(): number {
+  const parsed = Number(process.env.CRANBANIA_SLA_WARNING_PERCENT ?? 25);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= 100) return 25;
+  return parsed;
+}
+
+/** True when the card is inside the final threshold of its SLA window (not yet breached). */
+export function isSlaWarning(card: Card, now = Date.now()): boolean {
+  const status = computeSlaStatus(card, now);
+  if (status.resolved || status.breached || !status.dueAt || status.remainingMs == null) {
+    return false;
+  }
+
+  const createdMs = new Date(card.createdAt).getTime();
+  const dueMs = new Date(status.dueAt).getTime();
+  const totalMs = dueMs - createdMs;
+  if (totalMs <= 0) return false;
+
+  const threshold = getSlaWarningThresholdPercent() / 100;
+  return status.remainingMs <= totalMs * threshold;
+}
+
 export function formatSlaRemaining(ms: number): string {
   if (ms <= 0) return "breached";
   const hours = Math.floor(ms / 3600_000);

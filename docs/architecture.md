@@ -21,6 +21,10 @@ lib/
 │   ├── event-bus.ts      ← components-guide (orchestration hooks)
 │   ├── sla-scheduler.ts  ← adaptive automation (no GitHub required)
 │   └── migrations.ts     ← migration-helper
+├── automation/
+│   ├── forgejo-dispatch.ts ← Forgejo workflow dispatch on card events
+│   ├── register.ts       ← startup sidecar registration
+│   └── status.ts           ← shared automation status builder
 ├── schemas/
 │   └── card.ts           ← schema-builder + function-creator validators
 ├── board.ts              ← domain CRUD
@@ -51,7 +55,8 @@ You attached Convex plugin skills. **CranBania does not use Convex** (zero-cost 
 |-------------|------------------|--------|
 | **MCP** (`npm run mcp`) | **Yes** | Primary agent interface |
 | **Outbound webhooks** | **Yes** | n8n, Forgejo relay, custom agents |
-| **Forgejo Actions** | **Yes** | Self-hosted SLA cron (optional) |
+| **Forgejo Actions + dispatch API** | **Yes** | SLA cron + agent workflows via sidecar |
+| **Woodpecker CI** | **Yes** | `.woodpecker/*.yaml` cron pipelines |
 | **GitHub Actions** | Optional | Documented but not required |
 | **n8n self-hosted** | **Yes** | Webhook + schedule |
 | **Cloudflare Workers** | Optional | Could host relay; not required |

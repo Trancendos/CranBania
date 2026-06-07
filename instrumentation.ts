@@ -1,14 +1,9 @@
 /**
- * Next.js instrumentation — starts in-process SLA scheduler when configured.
- * Set CRANBANIA_SLA_POLL_INTERVAL_MS (e.g. 60000) alongside npm run start.
+ * Next.js instrumentation hook.
+ * Sidecars register lazily on first card event (see lib/services/event-bus.ts).
+ * SLA polling runs via `npm run sla:poll` sidecar (keeps Node fs/crypto out of this bundle).
  */
 
 export async function register() {
-  if (!process.env.CRANBANIA_SLA_POLL_INTERVAL_MS) return;
-
-  const { startSlaScheduler } = await import("./lib/services/sla-scheduler");
-  startSlaScheduler();
-  console.info(
-    "[cranbania] In-process SLA scheduler enabled via CRANBANIA_SLA_POLL_INTERVAL_MS",
-  );
+  // Intentionally empty — see docs/automation-recipes.md
 }

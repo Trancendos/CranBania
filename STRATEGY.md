@@ -48,15 +48,13 @@ Paid tools may be used optionally by teams, but **CranBania will not depend on t
 - `GET /api/export` — full JSON backup
 - `POST /api/import` — merge or replace
 
-### Track 6 — Modular automation (v0.4.1)
+### Track 6 — Modular automation (v0.5.0)
 
-- **Built-in SLA poller** — `npm run sla:poll` (adaptive sidecar, no GitHub)
-- **In-process scheduler** — `CRANBANIA_SLA_POLL_INTERVAL_MS` + `instrumentation.ts`
-- **Forgejo Actions** — `.forgejo/workflows/cranbania-sla-check.yml`
-- **Event bus** — `lib/services/event-bus.ts` for webhook + sidecar handlers
-- **Auth module** — optional `CRANBANIA_CRON_SECRET` / `CRANBANIA_API_KEY`
-- **JSON migrations** — versioned board/workspace (`lib/services/migrations.ts`)
-- **Automation status** — `GET /api/automation/status`
+- Built-in SLA poller, Forgejo/Woodpecker CI recipes
+- **Forgejo workflow dispatch sidecar** on card events
+- **API key middleware** for mutating routes
+- Event bus + JSON migrations + automation status API
+- MCP: `get_automation_status`, `run_sla_check`
 
 See `docs/architecture.md` and `docs/automation-recipes.md`.
 

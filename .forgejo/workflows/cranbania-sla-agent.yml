@@ -1,0 +1,30 @@
+# Forgejo Actions — SLA breach response (optional; CranBania also fires webhooks directly).
+name: CranBania SLA breach agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      event:
+        required: true
+        type: string
+      card_id:
+        required: true
+        type: string
+      card_title:
+        required: true
+        type: string
+      payload_json:
+        required: false
+        type: string
+
+jobs:
+  escalate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Escalate breached SLA
+        env:
+          CARD_ID: ${{ inputs.card_id }}
+          CARD_TITLE: ${{ inputs.card_title }}
+        run: |
+          echo "SLA breach for: ${CARD_TITLE} (${CARD_ID})"
+          echo "Add paging, ticket sync, or agent re-queue here"

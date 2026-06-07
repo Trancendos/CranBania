@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runSlaBreachChecks } from "@/lib/sla-monitor";
+import { runSlaChecks } from "@/lib/sla-monitor";
 import { verifyCronAuth, authRequiredResponse } from "@/lib/services/auth";
 
 /**
@@ -13,10 +13,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(authRequiredResponse("cron"), { status: 401 });
   }
 
-  const updated = await runSlaBreachChecks();
+  const { breaches, warnings } = await runSlaChecks();
   return NextResponse.json({
     ok: true,
-    cardsNotified: updated,
+    cardsNotified: breaches,
+    warningsNotified: warnings,
     checkedAt: new Date().toISOString(),
   });
 }
@@ -27,8 +28,9 @@ export async function GET() {
     description: "Run SLA breach scan and dispatch webhooks",
     preferredAlternatives: [
       "npm run sla:poll (sidecar, adaptive)",
-      "CRANBANIA_SLA_POLL_INTERVAL_MS with npm run start",
+      "npm run start:full (Next.js + SLA poller)",
       ".forgejo/workflows/cranbania-sla-check.yml",
+      ".woodpecker/cranbania-sla.yaml",
       "n8n schedule → POST this endpoint",
     ],
     auth: process.env.CRANBANIA_CRON_SECRET

@@ -10,11 +10,31 @@ import {
 
 export type CardEventSidecar = (payload: WebhookPayload) => Promise<void>;
 
-const sidecarHandlers: CardEventSidecar[] = [];
+interface SidecarRegistration {
+  name: string;
+  handler: CardEventSidecar;
+}
+
+const sidecarHandlers: SidecarRegistration[] = [];
+let sidecarsInitialized = false;
+
+async function ensureAutomationSidecars(): Promise<void> {
+  if (sidecarsInitialized) return;
+  sidecarsInitialized = true;
+  const { registerAutomationSidecars } = await import("../automation/register-sidecars");
+  await registerAutomationSidecars();
+}
 
 /** Register extra automation handlers (Forgejo relay, logging, agent triggers). */
-export function registerCardEventSidecar(handler: CardEventSidecar): void {
-  sidecarHandlers.push(handler);
+export function registerCardEventSidecar(
+  name: string,
+  handler: CardEventSidecar,
+): void {
+  sidecarHandlers.push({ name, handler });
+}
+
+export function listSidecarHandlers(): string[] {
+  return sidecarHandlers.map((s) => s.name);
 }
 
 export function listSidecarHandlerCount(): number {
@@ -28,7 +48,16 @@ export function listSidecarHandlerCount(): number {
 export async function emitCardEvent(
   payload: WebhookPayload,
 ): Promise<WebhookResult[]> {
+  await ensureAutomationSidecars();
   const results = await dispatchWebhooks(payload);
-  await Promise.all(sidecarHandlers.map((h) => h(payload)));
+  await Promise.all(
+    sidecarHandlers.map(async ({ name, handler }) => {
+      try {
+        await handler(payload);
+      } catch (err) {
+        console.warn(`[cranbania] sidecar ${name} failed:`, err);
+      }
+    }),
+  );
   return results;
 }
