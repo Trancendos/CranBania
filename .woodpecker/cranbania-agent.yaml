@@ -1,0 +1,17 @@
+# Woodpecker CI — manual agent smoke test (workflow_dispatch equivalent).
+when:
+  - event: manual
+
+steps:
+  agent-smoke:
+    image: curlimages/curl:8.5.0
+    environment:
+      CRANBANIA_URL:
+        from_secret: cranbania_url
+      CRANBANIA_API_KEY:
+        from_secret: cranbania_api_key
+    commands:
+      - |
+        curl -sf "${CRANBANIA_URL}/api/automation/status" | head -c 500
+        echo ""
+        echo "Woodpecker can also POST to CranBania mutating routes with CRANBANIA_API_KEY"

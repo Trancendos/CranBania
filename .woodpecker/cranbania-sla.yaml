@@ -1,0 +1,19 @@
+# Woodpecker CI — SLA breach cron (self-hosted, parallel to Forgejo Actions).
+# Secrets: cranbania_url, cranbania_cron_secret
+when:
+  - event: cron
+    cron: "*/5 * * * *"
+
+steps:
+  sla-check:
+    image: curlimages/curl:8.5.0
+    environment:
+      CRANBANIA_URL:
+        from_secret: cranbania_url
+      CRANBANIA_CRON_SECRET:
+        from_secret: cranbania_cron_secret
+    commands:
+      - |
+        curl -sf -X POST "${CRANBANIA_URL}/api/itsm/sla/check" \
+          -H "Authorization: Bearer ${CRANBANIA_CRON_SECRET}" \
+          -H "Content-Type: application/json"

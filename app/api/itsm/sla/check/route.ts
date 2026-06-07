@@ -1,0 +1,40 @@
+import { NextRequest, NextResponse } from "next/server";
+import { runSlaChecks } from "@/lib/sla-monitor";
+import { verifyCronAuth, authRequiredResponse } from "@/lib/services/auth";
+
+/**
+ * POST /api/itsm/sla/check
+ * Scan all cards for SLA breaches and fire card.sla_breach webhooks once per card.
+ *
+ * Prefer built-in polling (npm run sla:poll) or Forgejo Actions — see docs/automation-recipes.md.
+ */
+export async function POST(request: NextRequest) {
+  if (!verifyCronAuth(request)) {
+    return NextResponse.json(authRequiredResponse("cron"), { status: 401 });
+  }
+
+  const { breaches, warnings } = await runSlaChecks();
+  return NextResponse.json({
+    ok: true,
+    cardsNotified: breaches,
+    warningsNotified: warnings,
+    checkedAt: new Date().toISOString(),
+  });
+}
+
+export async function GET() {
+  return NextResponse.json({
+    endpoint: "POST /api/itsm/sla/check",
+    description: "Run SLA breach scan and dispatch webhooks",
+    preferredAlternatives: [
+      "npm run sla:poll (sidecar, adaptive)",
+      "npm run start:full (Next.js + SLA poller)",
+      ".forgejo/workflows/cranbania-sla-check.yml",
+      ".woodpecker/cranbania-sla.yaml",
+      "n8n schedule → POST this endpoint",
+    ],
+    auth: process.env.CRANBANIA_CRON_SECRET
+      ? "Bearer CRANBANIA_CRON_SECRET"
+      : "none (set CRANBANIA_CRON_SECRET in production)",
+  });
+}

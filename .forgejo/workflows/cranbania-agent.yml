@@ -1,0 +1,52 @@
+# Forgejo Actions — agent runner triggered by CranBania card.in_progress (via API dispatch).
+name: CranBania agent runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      event:
+        description: CranBania event type
+        required: true
+        type: string
+      card_id:
+        description: Card UUID
+        required: true
+        type: string
+      card_title:
+        description: Card title
+        required: true
+        type: string
+      card_type:
+        description: task|feature|bug|incident|change
+        required: false
+        type: string
+      priority:
+        description: low|medium|high|critical
+        required: false
+        type: string
+      payload_json:
+        description: Full CranBania webhook payload JSON
+        required: false
+        type: string
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show card context
+        run: |
+          echo "Event: ${{ inputs.event }}"
+          echo "Card: ${{ inputs.card_title }} (${{ inputs.card_id }})"
+          echo "Type: ${{ inputs.card_type }} Priority: ${{ inputs.priority }}"
+
+      - name: Run agent hook
+        env:
+          CARD_ID: ${{ inputs.card_id }}
+          CARD_TITLE: ${{ inputs.card_title }}
+          PAYLOAD_JSON: ${{ inputs.payload_json }}
+        run: |
+          echo "Replace this step with your agent runner, e.g.:"
+          echo "  npm run agent -- --card \"${CARD_ID}\""
+          # git worktree path is inside payload_json if present
