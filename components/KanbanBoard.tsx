@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import CardDetailPanel from "@/components/CardDetailPanel";
-import type { Board, Card, Column, ColumnId } from "@/lib/types";
+import WorkspaceBar from "@/components/WorkspaceBar";
+import type { Board, Card, CardType, Column, ColumnId } from "@/lib/types";
+import { formatSlaRemaining, computeSlaStatus } from "@/lib/sla";
 
 async function fetchBoard(): Promise<Board> {
   const res = await fetch("/api/board");
@@ -40,6 +42,30 @@ function CardItem({
         onClick={() => onSelect(card)}
       >
         <h3 className="font-semibold leading-snug">{card.title}</h3>
+        <div className="mt-1 flex flex-wrap gap-1">
+          <span className="rounded bg-[var(--background)] px-1.5 py-0.5 text-[10px] uppercase">
+            {card.cardType}
+          </span>
+          {card.priority !== "medium" ? (
+            <span className="rounded bg-[var(--accent-muted)] px-1.5 py-0.5 text-[10px] text-[var(--accent)]">
+              {card.priority}
+            </span>
+          ) : null}
+          {card.slaDueAt && card.columnId !== "done" ? (
+            <span
+              className={
+                computeSlaStatus(card).breached
+                  ? "text-[10px] text-red-400"
+                  : "text-[10px] text-[var(--muted)]"
+              }
+            >
+              SLA:{" "}
+              {computeSlaStatus(card).breached
+                ? "breached"
+                : formatSlaRemaining(computeSlaStatus(card).remainingMs ?? 0)}
+            </span>
+          ) : null}
+        </div>
         {card.description ? (
           <p className="mt-1 text-sm text-[var(--muted)] line-clamp-2">
             {card.description}
@@ -162,6 +188,8 @@ export default function KanbanBoard() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [backlogCount, setBacklogCount] = useState(0);
+  const [sprintFilter, setSprintFilter] = useState<string | null>(null);
+  const [cardType, setCardType] = useState<CardType>("task");
 
   const reload = useCallback(async () => {
     try {
@@ -194,7 +222,13 @@ export default function KanbanBoard() {
     const res = await fetch("/api/cards", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description, tags: ["agent-ready"] }),
+      body: JSON.stringify({
+        title,
+        description,
+        tags: ["agent-ready"],
+        cardType,
+        sprintId: sprintFilter ?? undefined,
+      }),
     });
     if (!res.ok) {
       setError("Failed to create card");
@@ -222,6 +256,11 @@ export default function KanbanBoard() {
 
   const selectedCard =
     board?.cards.find((c) => c.id === selectedId) ?? null;
+
+  const visibleCards =
+    sprintFilter && board
+      ? board.cards.filter((c) => c.sprintId === sprintFilter)
+      : board?.cards ?? [];
 
   if (loading) {
     return (
@@ -269,6 +308,17 @@ export default function KanbanBoard() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+          <select
+            className="rounded border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+            value={cardType}
+            onChange={(e) => setCardType(e.target.value as CardType)}
+          >
+            <option value="task">Task</option>
+            <option value="feature">Feature</option>
+            <option value="bug">Bug</option>
+            <option value="incident">Incident (ITSM)</option>
+            <option value="change">Change (ITSM)</option>
+          </select>
           <button
             type="submit"
             className="rounded bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
@@ -278,12 +328,18 @@ export default function KanbanBoard() {
         </form>
       </header>
 
+      <WorkspaceBar
+        sprintFilter={sprintFilter}
+        onSprintFilter={setSprintFilter}
+        onRefresh={reload}
+      />
+
       <div className="flex gap-4 overflow-x-auto pb-4">
         {board.columns.map((column) => (
           <ColumnView
             key={column.id}
             column={column}
-            cards={board.cards}
+            cards={visibleCards}
             onMove={handleMove}
             onDelete={handleDelete}
             onSelect={(c) => setSelectedId(c.id)}

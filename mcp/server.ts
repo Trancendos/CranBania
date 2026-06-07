@@ -12,17 +12,22 @@ import {
   getCardJournal,
   listBacklog,
   listCards,
+  listCardsByType,
+  getPrince2Overview,
+  getSlaReport,
   moveCard,
   readBoard,
   updateCard,
 } from "../lib/board";
-import { COLUMN_IDS, type ColumnId } from "../lib/types";
+import { exportWorkspace } from "../lib/export";
+import { createEpic, createSprint } from "../lib/workspace";
+import { CARD_TYPES, COLUMN_IDS, type CardType, type ColumnId } from "../lib/types";
 
 const columnIdSchema = z.enum(COLUMN_IDS as [string, ...string[]]);
 
 const server = new McpServer({
   name: "cranbania",
-  version: "0.2.0",
+  version: "0.3.0",
 });
 
 server.tool(
@@ -172,12 +177,15 @@ server.tool(
     description: z.string().optional(),
     columnId: columnIdSchema.optional().describe("Defaults to backlog"),
     assignee: z.string().optional().describe("e.g. claude, cursor, human"),
-    tags: z.array(z.string()).optional(),
+    cardType: z.enum(CARD_TYPES as [string, ...string[]]).optional(),
+    sprintId: z.string().optional(),
+    epicId: z.string().optional(),
   },
   async (input) => {
     const card = await createCard({
       ...input,
       columnId: input.columnId as ColumnId | undefined,
+      cardType: input.cardType as CardType | undefined,
     });
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ card }, null, 2) }],
@@ -247,6 +255,84 @@ server.tool(
         },
       ],
       isError: !ok,
+    };
+  },
+);
+
+server.tool(
+  "export_workspace",
+  "Export full workspace JSON (board + epics + sprints) — zero-cost backup",
+  {},
+  async () => {
+    const data = await exportWorkspace();
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "create_epic",
+  "Create an Agile epic (free, built-in)",
+  { title: z.string().min(1), description: z.string().optional() },
+  async ({ title, description }) => {
+    const epic = await createEpic(title, description);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ epic }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "create_sprint",
+  "Create a sprint; optionally activate it",
+  {
+    name: z.string().min(1),
+    goal: z.string().optional(),
+    startDate: z.string(),
+    endDate: z.string(),
+    activate: z.boolean().optional(),
+  },
+  async (input) => {
+    const sprint = await createSprint(input);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ sprint }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "list_incidents",
+  "ITSM-lite: list incident cards with SLA status (no ServiceNow)",
+  {},
+  async () => {
+    const incidents = await listCardsByType("incident");
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ incidents }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "get_sla_report",
+  "All cards with SLA timers and breach status",
+  {},
+  async () => {
+    const sla = await getSlaReport();
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ sla }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "get_prince2_overview",
+  "Prince2-lite stage counts across cards",
+  {},
+  async () => {
+    const overview = await getPrince2Overview();
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ overview }, null, 2) }],
     };
   },
 );

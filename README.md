@@ -1,30 +1,22 @@
 # CranBania
 
-**Kanban board built for humans and AI agents** — with per-card journal, code diffs, git worktrees, and webhooks.
+**Zero-cost Kanban for humans and AI agents** — journal, worktrees, webhooks, Agile sprints, ITSM-lite, Prince2 tags. **No Jira. No ServiceNow.**
+
+See [STRATEGY.md](./STRATEGY.md) for the £0 mandate and roadmap.
+
+## Zero-cost alternatives built in
+
+| Instead of… | Use CranBania… |
+|-------------|----------------|
+| Jira backlog/sprints | Backlog column + `/api/sprints` + epics |
+| ServiceNow incidents | `cardType: incident` + SLA (default 4h) |
+| ServiceNow changes | `cardType: change` + SLA (default 72h) |
+| Prince2 tooling | `prince2Stage` on each card |
+| Paid backups | `GET /api/export` JSON |
 
 ## Columns
 
-| Column | Purpose | Side effects |
-|--------|---------|--------------|
-| **Backlog** | Incoming work (default for new cards) | — |
-| **Planning** | Specs and breakdown | — |
-| **In Progress** | Active agent/human work | **Git worktree** + **webhooks** |
-| **Review** | Human or AI review | — |
-| **Done** | Completed | — |
-
-## Per-card journal (recommended)
-
-Each card carries a unified **journal** — audit log + comments + code events:
-
-| Entry type | What it records |
-|------------|-----------------|
-| `created` / `moved` / `updated` | Board changes |
-| `comment` | Notes from humans or agents |
-| `code_change` | File diffs (added / edited / deleted segments) |
-| `worktree` | Git branch isolation when entering In Progress |
-| `webhook` | Delivery status for external triggers |
-
-**Yes — a journal per card is worth it.** It gives agents continuity without a separate ticketing system.
+Backlog → Planning → In Progress (worktree + webhooks) → Review → Done
 
 ## Quick start
 
@@ -33,79 +25,44 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Click a card to open its journal panel.
+## Card types
 
-### Webhooks (on `in_progress`)
+`task` | `feature` | `bug` | `incident` | `change`
+
+Incidents/changes get automatic SLA due dates. Journal records breaches.
+
+## Key APIs
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/backlog` | Backlog queue |
+| `GET/POST /api/epics` | Agile epics |
+| `GET/POST /api/sprints` | Sprints + burndown |
+| `GET /api/itsm/incidents` | Free incident queue |
+| `GET /api/itsm/changes` | Change records |
+| `GET /api/itsm/sla` | SLA report |
+| `GET /api/governance/prince2` | Stage overview |
+| `GET /api/export` | Full backup |
+| `POST /api/import` | Restore merge/replace |
+
+Plus all v0.2 routes: journal, comments, code-changes, webhooks, MCP.
+
+## MCP
 
 ```bash
-# Register a webhook
-curl -X POST http://localhost:3000/api/webhooks \
-  -H 'Content-Type: application/json' \
-  -d '{"url":"https://your-agent-runner.example/hook"}'
-
-# Or set env (comma-separated)
-export CRANBANIA_WEBHOOK_URLS="https://hook1.example,https://hook2.example"
+npm run mcp
 ```
 
-Payload:
-
-```json
-{
-  "event": "card.in_progress",
-  "card": { "id", "title", "worktree": { "path", "branch" } }
-}
-```
-
-### Git worktree per card
-
-When a card moves to **In Progress**, CranBania creates:
-
-- Branch: `card/<short-id>-<slugified-title>`
-- Worktree: `data/worktrees/<card-id>/`
-
-Agents can work in isolation without touching your main checkout.
-
-## REST API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/backlog` | Backlog cards only |
-| `GET` | `/api/board` | Full board |
-| `GET` | `/api/cards/:id/journal` | Audit log |
-| `POST` | `/api/cards/:id/comments` | `{ "message", "actor?" }` |
-| `POST` | `/api/cards/:id/code-changes` | `{ "filePath", "changeType", "content", ... }` |
-| `POST` | `/api/cards/:id/move` | `{ "columnId", "actor?" }` — triggers worktree + webhooks on `in_progress` |
-| `GET/POST` | `/api/webhooks` | Webhook config |
-
-## MCP tools
-
-`npm run mcp` — see `.cursor/mcp.example.json`
-
-Includes: `list_backlog`, `get_journal`, `add_comment`, `add_code_change`, `move_card`, …
-
-## Product scope: Agile / Prince2 / ITIL?
-
-| Scope | Worth building into CranBania? |
-|-------|-------------------------------|
-| **Card journal + code diffs** | ✅ Yes — core value for AI agents |
-| **Kanban + backlog** | ✅ Yes — already here |
-| **Git worktree + webhooks** | ✅ Yes — agent orchestration |
-| **Full Agile ceremonies** | ⚠️ Later — sprints, velocity, burndown as optional modules |
-| **Prince2 stage gates** | ❌ Not yet — different audience; integrate via tags/columns first |
-| **Full ITSM / ITIL** | ❌ Not in v1 — use Jira/ServiceNow + MCP sync instead |
-
-**Recommendation:** Keep CranBania focused as an **agent-native task board**. Add ITIL/Prince2 only when you have a concrete customer need — otherwise you rebuild ServiceNow poorly.
+New tools: `create_epic`, `create_sprint`, `list_incidents`, `get_sla_report`, `export_workspace`, …
 
 ## Scripts
 
 ```bash
-npm run dev      # port 3000
-npm run mcp      # MCP stdio
+npm run dev
 npm test
 npm run lint
 npm run build
+npm run mcp
 ```
 
-## License
-
-MIT
+MIT · self-hosted · no SaaS required

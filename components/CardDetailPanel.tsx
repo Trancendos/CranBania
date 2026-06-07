@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Card, CodeChange, JournalEntry } from "@/lib/types";
+import { computeSlaStatus, formatSlaRemaining } from "@/lib/sla";
 
 function JournalIcon({ type }: { type: JournalEntry["type"] }) {
   const colors: Record<JournalEntry["type"], string> = {
@@ -12,6 +13,7 @@ function JournalIcon({ type }: { type: JournalEntry["type"] }) {
     code_change: "text-orange-400",
     webhook: "text-cyan-400",
     worktree: "text-emerald-400",
+    sla: "text-red-400",
   };
   return (
     <span className={`text-[10px] uppercase ${colors[type]}`}>{type}</span>
@@ -88,6 +90,20 @@ export default function CardDetailPanel({
               worktree: {card.worktree.branch}
             </p>
           ) : null}
+          <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
+            <span>{card.cardType}</span>
+            <span>{card.priority}</span>
+            {card.prince2Stage ? <span>PRINCE2: {card.prince2Stage}</span> : null}
+            {card.storyPoints ? <span>{card.storyPoints} pts</span> : null}
+            {card.slaDueAt ? (
+              <span className={computeSlaStatus(card).breached ? "text-red-400" : ""}>
+                SLA:{" "}
+                {computeSlaStatus(card).breached
+                  ? "breached"
+                  : formatSlaRemaining(computeSlaStatus(card).remainingMs ?? 0)}
+              </span>
+            ) : null}
+          </div>
         </div>
         <button
           type="button"

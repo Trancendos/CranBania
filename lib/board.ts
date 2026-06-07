@@ -7,13 +7,17 @@ import { createWorktreeForCard } from "./worktree";
 import {
   Board,
   Card,
+  CardType,
   CodeChange,
   ColumnId,
   DEFAULT_COLUMNS,
   COLUMN_IDS,
   JournalEntry,
+  Priority,
+  Prince2Stage,
   migrateCard,
 } from "./types";
+import { computeSlaStatus } from "./sla";
 
 function boardPath() {
   return path.join(process.cwd(), "data", "board.json");
@@ -91,6 +95,13 @@ export interface CreateCardInput {
   assignee?: string;
   tags?: string[];
   actor?: string;
+  cardType?: CardType;
+  priority?: Priority;
+  epicId?: string;
+  sprintId?: string;
+  prince2Stage?: Prince2Stage;
+  slaResponseHours?: number;
+  storyPoints?: number;
 }
 
 export async function createCard(input: CreateCardInput): Promise<Card> {
@@ -102,7 +113,8 @@ export async function createCard(input: CreateCardInput): Promise<Card> {
 
   const now = new Date().toISOString();
   const actor = input.actor ?? "human";
-  const card: Card = {
+  const cardType = input.cardType ?? "task";
+  const card: Card = migrateCard({
     id: randomUUID(),
     title: input.title,
     description: input.description ?? "",
@@ -110,18 +122,25 @@ export async function createCard(input: CreateCardInput): Promise<Card> {
     order: nextOrder(board.cards, columnId),
     assignee: input.assignee,
     tags: input.tags ?? [],
+    cardType,
+    priority: input.priority,
+    epicId: input.epicId,
+    sprintId: input.sprintId,
+    prince2Stage: input.prince2Stage,
+    slaResponseHours: input.slaResponseHours,
+    storyPoints: input.storyPoints,
     journal: [
       createJournalEntry(
         "created",
-        `Card created in ${columnId}`,
+        `Card created in ${columnId} (${cardType})`,
         actor,
-        { columnId, title: input.title },
+        { columnId, title: input.title, cardType },
       ),
     ],
     codeChanges: [],
     createdAt: now,
     updatedAt: now,
-  };
+  });
 
   board.cards.push(card);
   await writeBoard(board);
@@ -134,6 +153,13 @@ export interface UpdateCardInput {
   assignee?: string;
   tags?: string[];
   actor?: string;
+  cardType?: CardType;
+  priority?: Priority;
+  epicId?: string | null;
+  sprintId?: string | null;
+  prince2Stage?: Prince2Stage;
+  slaResponseHours?: number;
+  storyPoints?: number;
 }
 
 export async function updateCard(
@@ -157,6 +183,18 @@ export async function updateCard(
   if (input.tags && JSON.stringify(input.tags) !== JSON.stringify(existing.tags)) {
     changes.push("tags");
   }
+  if (input.cardType && input.cardType !== existing.cardType) changes.push("cardType");
+  if (input.priority && input.priority !== existing.priority) changes.push("priority");
+  if (input.epicId !== undefined && input.epicId !== existing.epicId) changes.push("epicId");
+  if (input.sprintId !== undefined && input.sprintId !== existing.sprintId) {
+    changes.push("sprintId");
+  }
+  if (input.prince2Stage && input.prince2Stage !== existing.prince2Stage) {
+    changes.push("prince2Stage");
+  }
+  if (input.storyPoints !== undefined && input.storyPoints !== existing.storyPoints) {
+    changes.push("storyPoints");
+  }
 
   const updated: Card = {
     ...existing,
@@ -164,6 +202,14 @@ export async function updateCard(
     description: input.description ?? existing.description,
     assignee: input.assignee ?? existing.assignee,
     tags: input.tags ?? existing.tags,
+    cardType: input.cardType ?? existing.cardType,
+    priority: input.priority ?? existing.priority,
+    epicId: input.epicId === null ? undefined : (input.epicId ?? existing.epicId),
+    sprintId:
+      input.sprintId === null ? undefined : (input.sprintId ?? existing.sprintId),
+    prince2Stage: input.prince2Stage ?? existing.prince2Stage,
+    slaResponseHours: input.slaResponseHours ?? existing.slaResponseHours,
+    storyPoints: input.storyPoints ?? existing.storyPoints,
     journal: [
       ...existing.journal,
       ...(changes.length > 0
@@ -329,6 +375,33 @@ export async function moveCard(
     updated = await handleInProgressSideEffects(updated, actor);
   }
 
+  if (columnId === "done" && !updated.resolvedAt) {
+    updated = {
+      ...updated,
+      resolvedAt: new Date().toISOString(),
+      journal: [
+        ...updated.journal,
+        createJournalEntry("sla", "SLA clock stopped (resolved)", actor),
+      ],
+    };
+  }
+
+  const sla = computeSlaStatus(updated);
+  if (sla.breached && !updated.journal.some((j) => j.type === "sla" && j.message.includes("breached"))) {
+    updated = {
+      ...updated,
+      journal: [
+        ...updated.journal,
+        createJournalEntry(
+          "sla",
+          `SLA breached (due ${updated.slaDueAt})`,
+          "system",
+          { sla },
+        ),
+      ],
+    };
+  }
+
   board.cards[index] = updated;
   await writeBoard(board);
   return updated;
@@ -426,8 +499,16 @@ export async function getBoardSummary(): Promise<{
   columns: { id: ColumnId; title: string; cardCount: number }[];
   totalCards: number;
   backlogCount: number;
+  openIncidents: number;
+  slaBreached: number;
 }> {
   const board = await readBoard();
+  const incidents = board.cards.filter(
+    (c) => c.cardType === "incident" && c.columnId !== "done",
+  );
+  const breached = board.cards.filter(
+    (c) => computeSlaStatus(c).breached,
+  ).length;
   return {
     columns: board.columns.map((col) => ({
       id: col.id,
@@ -436,5 +517,43 @@ export async function getBoardSummary(): Promise<{
     })),
     totalCards: board.cards.length,
     backlogCount: board.cards.filter((c) => c.columnId === "backlog").length,
+    openIncidents: incidents.length,
+    slaBreached: breached,
   };
+}
+
+export async function listCardsByType(cardType: CardType): Promise<Card[]> {
+  const board = await readBoard();
+  return board.cards.filter((c) => c.cardType === cardType);
+}
+
+export async function listCardsBySprint(sprintId: string): Promise<Card[]> {
+  const board = await readBoard();
+  return board.cards.filter((c) => c.sprintId === sprintId);
+}
+
+export async function getSlaReport(): Promise<
+  ReturnType<typeof computeSlaStatus>[]
+> {
+  const board = await readBoard();
+  return board.cards
+    .filter((c) => c.slaDueAt)
+    .map((c) => computeSlaStatus(c));
+}
+
+export async function getPrince2Overview(): Promise<
+  Record<Prince2Stage, number>
+> {
+  const board = await readBoard();
+  const counts = {} as Record<Prince2Stage, number>;
+  for (const stage of [
+    "starting_up",
+    "initiation",
+    "delivery",
+    "stage_boundary",
+    "closing",
+  ] as Prince2Stage[]) {
+    counts[stage] = board.cards.filter((c) => c.prince2Stage === stage).length;
+  }
+  return counts;
 }
