@@ -24,13 +24,15 @@ export function getIntegrationStatus() {
       : { configured: false },
     woodpecker: {
           pipelines: [
+            ".woodpecker/cranbania-ci.yaml",
             ".woodpecker/cranbania-sla.yaml",
             ".woodpecker/cranbania-agent.yaml",
           ],
-          note: "Enable in Woodpecker with secrets cranbania_url + cranbania_cron_secret",
+          note: "Enable in Woodpecker; cranbania-ci runs npm test/lint/build on push/PR",
         },
     forgejoActions: {
           workflows: [
+            ".forgejo/workflows/cranbania-ci.yml",
             ".forgejo/workflows/cranbania-sla-check.yml",
             ".forgejo/workflows/cranbania-agent.yml",
             ".forgejo/workflows/cranbania-sla-agent.yml",

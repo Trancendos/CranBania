@@ -1,15 +1,16 @@
 # CranBania automation (zero-cost)
 
-**Recommended order** — no GitHub Actions required:
+**Recommended order** — **no GitHub Actions** (forbidden for this repo; use Forgejo/Woodpecker):
 
-1. **Built-in sidecar** — `npm run sla:poll` (adaptive, self-hosted)
-2. **App + poller** — `npm run start:full` after `npm run build`
-3. **Forgejo Actions** — `.forgejo/workflows/cranbania-sla-check.yml` (self-hosted forge)
-4. **Woodpecker CI** — `.woodpecker/cranbania-sla.yaml`
-5. **n8n schedule** — POST `/api/itsm/sla/check` or run `npm run sla:poll:once`
-6. **systemd timer** — on your VM (see below)
+1. **Forgejo CI** — `.forgejo/workflows/cranbania-ci.yml` (test, lint, build on push/PR)
+2. **Built-in sidecar** — `npm run sla:poll` (adaptive, self-hosted)
+3. **App + poller** — `npm run start:full` after `npm run build`
+4. **Forgejo SLA cron** — `.forgejo/workflows/cranbania-sla-check.yml`
+5. **Woodpecker** — `.woodpecker/cranbania-ci.yaml` + `cranbania-sla.yaml`
+6. **n8n schedule** — POST `/api/itsm/sla/check` or run `npm run sla:poll:once`
+7. **systemd timer** — on your VM (see below)
 
-GitHub Actions remains optional for teams already on github.com — not required.
+Do **not** add `.github/workflows/` — it violates the £0 mandate and can bill github.com Actions minutes.
 
 ## Prerequisites
 
@@ -54,6 +55,18 @@ curl -X POST http://localhost:3000/api/webhooks \
     "events": ["card.in_progress", "card.sla_warning", "card.sla_breach"]
   }'
 ```
+
+---
+
+## Recipe 0: Forgejo CI (test / lint / build)
+
+Primary in-repo gate on your self-hosted forge:
+
+`.forgejo/workflows/cranbania-ci.yml` (included)
+
+Enable Forgejo Actions on your instance. On push/PR to `main`, runs `npm ci`, `npm run lint`, `npm test`, `npm run build` on your runners — **zero github.com cost**.
+
+Woodpecker equivalent: `.woodpecker/cranbania-ci.yaml`
 
 ---
 
@@ -234,9 +247,9 @@ MCP agents can also call `run_sla_check` or `get_automation_status` without HTTP
 
 ---
 
-## Optional: GitHub Actions
+## GitHub Actions — do not use
 
-Only if you already use github.com — see git history for examples. Prefer Recipes 1–3 for zero vendor lock-in.
+This repository **must not** contain `.github/workflows/`. CranBania’s mandate is self-hosted Forgejo/Woodpecker CI. A GitHub Actions workflow was added in error and removed; do not reintroduce it.
 
 ---
 
@@ -245,7 +258,8 @@ Only if you already use github.com — see git history for examples. Prefer Reci
 | Tool | Use with CranBania? |
 |------|---------------------|
 | Node / npm | **Yes** — primary stack |
-| Forgejo | **Yes** — CI cron + **workflow dispatch sidecar** |
-| Woodpecker | **Yes** — `.woodpecker/*.yaml` cron pipelines |
+| Forgejo | **Yes** — CI + cron + **workflow dispatch sidecar** |
+| Woodpecker | **Yes** — `.woodpecker/*.yaml` CI + cron pipelines |
+| **GitHub Actions** | **No** — forbidden; use Forgejo instead |
 | Maven / Gradle | **No** |
 | Convex / WorkOS | **No** — see `docs/architecture.md` |

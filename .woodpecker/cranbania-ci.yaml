@@ -1,0 +1,15 @@
+# Woodpecker CI — test, lint, build (self-hosted; no GitHub Actions).
+when:
+  - event: push
+    branch: main
+  - event: pull_request
+  - event: manual
+
+steps:
+  verify:
+    image: node:22-alpine
+    commands:
+      - npm ci
+      - npm run lint
+      - npm test
+      - npm run build

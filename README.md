@@ -64,7 +64,7 @@ curl -X POST http://localhost:3000/api/cards \
 
 ## Automation (free)
 
-See [docs/automation-recipes.md](./docs/automation-recipes.md) — **built-in `npm run sla:poll`**, `npm run start:full`, Forgejo Actions, Woodpecker, n8n, systemd. GitHub Actions optional, not required.
+See [docs/automation-recipes.md](./docs/automation-recipes.md) — **Forgejo/Woodpecker CI** (`.forgejo/workflows/cranbania-ci.yml`), `npm run sla:poll`, `npm run start:full`. **No GitHub Actions.**
 
 Architecture and Convex-skill mapping: [docs/architecture.md](./docs/architecture.md).
 

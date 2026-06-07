@@ -57,7 +57,7 @@ You attached Convex plugin skills. **CranBania does not use Convex** (zero-cost 
 | **Outbound webhooks** | **Yes** | n8n, Forgejo relay, custom agents |
 | **Forgejo Actions + dispatch API** | **Yes** | SLA cron + agent workflows via sidecar |
 | **Woodpecker CI** | **Yes** | `.woodpecker/*.yaml` cron pipelines |
-| **GitHub Actions** | Optional | Documented but not required |
+| **GitHub Actions** | **Forbidden** | Use `.forgejo/workflows/` on self-hosted Forgejo |
 | **n8n self-hosted** | **Yes** | Webhook + schedule |
 | **Cloudflare Workers** | Optional | Could host relay; not required |
 | **Supabase / Convex / Clerk** | **No** | Conflicts with JSON-first zero-cost design |

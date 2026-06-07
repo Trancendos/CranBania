@@ -1,6 +1,8 @@
 # Third-party GitHub checks (org configuration)
 
-CranBania uses **in-repo** CI where possible (Forgejo Actions, Woodpecker — see `docs/automation-recipes.md`). Several **third-party GitHub Apps** may also report on pull requests. Failures from plan limits or repo scope are **not code defects** and cannot be fixed in this repository.
+CranBania uses **Forgejo Actions** and **Woodpecker** for in-repo CI — see `.forgejo/workflows/cranbania-ci.yml` and `.woodpecker/cranbania-ci.yaml`. **Do not add GitHub Actions** (`.github/workflows/`); that violates the £0 mandate and can incur github.com Actions minutes.
+
+Several **third-party GitHub Apps** may still report on pull requests when the repo is mirrored or hosted on github.com. Failures from plan limits or repo scope are **not code defects** and cannot be fixed in this repository.
 
 ## Known apps on Trancendos/CranBania
 
@@ -14,11 +16,15 @@ CranBania uses **in-repo** CI where possible (Forgejo Actions, Woodpecker — se
 
 ## When a check fails but the PR diff is unrelated
 
-1. Confirm **in-repo** validation: `npm test`, `npm run lint`, `npm run build`.
+1. Confirm **in-repo** validation on Forgejo/Woodpecker or locally: `npm test`, `npm run lint`, `npm run build`.
 2. Read the check summary — plan/scope/credit messages point to **SaaS configuration**, not application bugs.
 3. Org admin: adjust app installation, upgrade plan, or remove unused apps from the repo/org.
-4. If branch protection requires the check: either fix org config or merge with admin override when other gates pass.
+4. If branch protection requires the check: either fix org config or merge with admin override when Forgejo CI passes.
 
 ## PR #1 precedent (2026-06-07)
 
 [PR #1](https://github.com/Trancendos/CranBania/pull/1) added initial `AGENTS.md`. **CodeSlick Security** failed on Free-plan scope; GitGuardian passed. Merged with admin override after marking the draft ready — no code change required.
+
+## Removed: GitHub Actions CI (2026-06-07)
+
+A `.github/workflows/ci.yml` was added in error and **removed**. CranBania CI belongs on Forgejo/Woodpecker only.

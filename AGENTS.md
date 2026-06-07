@@ -4,6 +4,8 @@
 
 **Mandate:** no Jira, ServiceNow, or paid SaaS. **Not Convex** — see `docs/architecture.md`.
 
+**CI mandate:** do **not** add `.github/workflows/` or GitHub Actions. Use **Forgejo Actions** (`.forgejo/workflows/`) and/or **Woodpecker** (`.woodpecker/`) on your self-hosted forge — zero github.com Actions minutes.
+
 ## Services
 
 | Service | Command | Port |
@@ -95,9 +97,9 @@ npm run build
 
 ## Third-party CI checks
 
-GitHub Apps (CodeSlick, Debricked, Orange Pro AI, GitGuardian, etc.) may report on PRs independently of in-repo scripts. **Plan/scope/credit errors are org-config issues**, not PR bugs — see `docs/ci-third-party-checks.md`.
+GitHub Apps (CodeSlick, Debricked, Orange Pro AI, GitGuardian, etc.) may report on PRs on github.com independently of CranBania. **Plan/scope/credit errors are org-config issues**, not PR bugs — see `docs/ci-third-party-checks.md`.
 
-Required in-repo gates before merge: `npm test`, `npm run lint`, `npm run build`.
+**In-repo verification** (before merge): run locally or on **Forgejo/Woodpecker** — `npm test`, `npm run lint`, `npm run build`. See `.forgejo/workflows/cranbania-ci.yml` and `.woodpecker/cranbania-ci.yaml`. **Never add GitHub Actions workflows** to this repo.
 
 ## Cursor Cloud specific instructions
 

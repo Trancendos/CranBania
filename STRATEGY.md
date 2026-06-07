@@ -7,7 +7,8 @@ CranBania is built under a **£0 / $0 SaaS mandate**:
 - No Jira, ServiceNow, Linear paid tiers, or other licensed ITSM/agile platforms
 - No paid API keys required to operate the core product
 - Self-hosted, local JSON storage, open-source stack (Next.js + Node)
-- Webhooks point to **your own** free runners (local scripts, n8n self-hosted, Forgejo Actions, systemd, built-in `npm run sla:poll`, etc.)
+- Webhooks point to **your own** free runners (local scripts, n8n self-hosted, **Forgejo Actions**, Woodpecker, systemd, built-in `npm run sla:poll`, etc.)
+- **No GitHub Actions** — do not add `.github/workflows/`; CI runs on self-hosted Forgejo/Woodpecker only
 
 Paid tools may be used optionally by teams, but **CranBania will not depend on them or integrate them as required paths**.
 

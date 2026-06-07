@@ -1,14 +1,13 @@
-name: CI
+# Forgejo Actions — in-repo CI (test, lint, build). Zero GitHub Actions minutes.
+# Enable Actions on your Forgejo instance; runs on self-hosted runners.
+name: CranBania CI
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 jobs:
   verify:
