@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "cranbania": {
+      "command": "npm",
+      "args": ["run", "mcp"],
+      "cwd": "."
+    }
+  }
+}
