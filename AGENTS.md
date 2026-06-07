@@ -1,8 +1,8 @@
 # AGENTS.md
 
-## CranBania v0.4 — priority features
+## CranBania v0.4.1 — modular automation
 
-**Mandate:** no Jira, ServiceNow, or paid SaaS dependencies. Everything agents need is in-repo.
+**Mandate:** no Jira, ServiceNow, or paid SaaS dependencies. **Not Convex** — see `docs/architecture.md` for skill mapping.
 
 ## Services
 
@@ -11,6 +11,19 @@
 | Web + API | `npm run dev` | 3000 |
 | MCP | `npm run mcp` | stdio |
 | Incident queue UI | `/incidents` | 3000 |
+| **SLA poller (recommended)** | `npm run sla:poll` | sidecar |
+| Automation status | `GET /api/automation/status` | 3000 |
+
+## SLA polling (no GitHub Actions required)
+
+| Method | When |
+|--------|------|
+| `npm run sla:poll` | **Recommended** — adaptive sidecar |
+| `CRANBANIA_SLA_POLL_INTERVAL_MS` + `npm run start` | In-process with Next.js |
+| Forgejo Actions | `.forgejo/workflows/` — self-hosted |
+| `npm run sla:poll:once` | systemd / n8n / Forgejo curl |
+
+Details: `docs/automation-recipes.md`
 
 ## Agent workflow
 

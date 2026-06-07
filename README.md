@@ -42,6 +42,7 @@ Incidents/changes get automatic SLA due dates. Journal records breaches.
 | `GET /api/itsm/incidents` | Free incident queue (API) |
 | `GET /incidents` | Incident queue dashboard (UI) |
 | `POST /api/itsm/sla/check` | Cron SLA breach scan + webhooks |
+| `GET /api/automation/status` | Scheduler + webhook health |
 | `GET /api/itsm/changes` | Change records |
 | `GET /api/itsm/sla` | SLA report |
 | `GET /api/governance/prince2` | Stage overview |
@@ -52,7 +53,9 @@ Plus all v0.2 routes: journal, comments, code-changes, webhooks (`card.in_progre
 
 ## Automation (free)
 
-See [docs/automation-recipes.md](./docs/automation-recipes.md) for GitHub Actions SLA cron, n8n webhooks, and agent dispatch patterns. **Node/npm only** — Maven/Gradle are not used.
+See [docs/automation-recipes.md](./docs/automation-recipes.md) — **built-in `npm run sla:poll`**, Forgejo Actions, n8n, systemd. GitHub Actions optional, not required.
+
+Architecture and Convex-skill mapping: [docs/architecture.md](./docs/architecture.md).
 
 ## MCP
 
@@ -70,6 +73,7 @@ npm test
 npm run lint
 npm run build
 npm run mcp
+npm run sla:poll
 ```
 
 MIT · self-hosted · no SaaS required

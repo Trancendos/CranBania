@@ -7,7 +7,7 @@ CranBania is built under a **£0 / $0 SaaS mandate**:
 - No Jira, ServiceNow, Linear paid tiers, or other licensed ITSM/agile platforms
 - No paid API keys required to operate the core product
 - Self-hosted, local JSON storage, open-source stack (Next.js + Node)
-- Webhooks point to **your own** free runners (local scripts, n8n self-hosted, GitHub Actions free tier, etc.)
+- Webhooks point to **your own** free runners (local scripts, n8n self-hosted, Forgejo Actions, systemd, built-in `npm run sla:poll`, etc.)
 
 Paid tools may be used optionally by teams, but **CranBania will not depend on them or integrate them as required paths**.
 
@@ -43,10 +43,22 @@ Paid tools may be used optionally by teams, but **CranBania will not depend on t
 - Prince2 stage field per card
 - `/api/governance/prince2` overview
 
-### Track 5 — Data portability (this release)
+### Track 5 — Data portability (shipped)
 
 - `GET /api/export` — full JSON backup
 - `POST /api/import` — merge or replace
+
+### Track 6 — Modular automation (v0.4.1)
+
+- **Built-in SLA poller** — `npm run sla:poll` (adaptive sidecar, no GitHub)
+- **In-process scheduler** — `CRANBANIA_SLA_POLL_INTERVAL_MS` + `instrumentation.ts`
+- **Forgejo Actions** — `.forgejo/workflows/cranbania-sla-check.yml`
+- **Event bus** — `lib/services/event-bus.ts` for webhook + sidecar handlers
+- **Auth module** — optional `CRANBANIA_CRON_SECRET` / `CRANBANIA_API_KEY`
+- **JSON migrations** — versioned board/workspace (`lib/services/migrations.ts`)
+- **Automation status** — `GET /api/automation/status`
+
+See `docs/architecture.md` and `docs/automation-recipes.md`.
 
 ### Not building (unless mandate changes)
 

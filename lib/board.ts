@@ -2,7 +2,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { createJournalEntry } from "./journal";
-import { dispatchWebhooks } from "./webhooks";
+import { emitCardEvent } from "./services/event-bus";
+import { migrateBoard, stampBoard } from "./services/migrations";
 import { createWorktreeForCard } from "./worktree";
 import {
   Board,
@@ -41,10 +42,11 @@ export async function readBoard(): Promise<Board> {
   await ensureDataDir();
   try {
     const raw = await fs.readFile(boardPath(), "utf-8");
-    const board = JSON.parse(raw) as Board;
+    const parsed = JSON.parse(raw) as Parameters<typeof migrateBoard>[0];
+    const board = migrateBoard(parsed);
     return {
       columns: DEFAULT_COLUMNS,
-      cards: (board.cards ?? []).map((c) => migrateCard(c)),
+      cards: board.cards,
     };
   } catch {
     const board = emptyBoard();
@@ -55,7 +57,8 @@ export async function readBoard(): Promise<Board> {
 
 export async function writeBoard(board: Board): Promise<void> {
   await ensureDataDir();
-  await fs.writeFile(boardPath(), JSON.stringify(board, null, 2), "utf-8");
+  const stored = stampBoard({ ...board, columns: DEFAULT_COLUMNS });
+  await fs.writeFile(boardPath(), JSON.stringify(stored, null, 2), "utf-8");
 }
 
 function nextOrder(cards: Card[], columnId: ColumnId): number {
@@ -307,7 +310,7 @@ async function handleInProgressSideEffects(
     },
   };
 
-  const results = await dispatchWebhooks(webhookPayload);
+  const results = await emitCardEvent(webhookPayload);
   for (const result of results) {
     updated = {
       ...updated,

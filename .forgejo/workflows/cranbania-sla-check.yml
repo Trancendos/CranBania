@@ -1,0 +1,21 @@
+# Forgejo Actions (self-hosted) — optional external SLA cron.
+# Preferred: npm run sla:poll sidecar or CRANBANIA_SLA_POLL_INTERVAL_MS with next start.
+name: CranBania SLA check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sla-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CranBania SLA breach scan
+        env:
+          CRANBANIA_URL: ${{ secrets.CRANBANIA_URL }}
+          CRANBANIA_CRON_SECRET: ${{ secrets.CRANBANIA_CRON_SECRET }}
+        run: |
+          curl -sf -X POST "${CRANBANIA_URL}/api/itsm/sla/check" \
+            -H "Authorization: Bearer ${CRANBANIA_CRON_SECRET}" \
+            -H "Content-Type: application/json"

@@ -1,20 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { readWebhooks, writeWebhooks } from "@/lib/webhooks";
+import { webhookRegisterSchema } from "@/lib/schemas/card";
 import type { WebhookEvent } from "@/lib/types";
 import { randomUUID } from "crypto";
-
-const webhookEventSchema = z.enum(["card.in_progress", "card.sla_breach"]);
-
-const webhookSchema = z.object({
-  url: z.string().url(),
-  enabled: z.boolean().optional().default(true),
-  secret: z.string().optional(),
-  events: z.array(webhookEventSchema).optional().default([
-    "card.in_progress",
-    "card.sla_breach",
-  ]),
-});
 
 export async function GET() {
   const webhooks = await readWebhooks();
@@ -23,7 +11,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const parsed = webhookSchema.safeParse(body);
+  const parsed = webhookRegisterSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid request", details: parsed.error.flatten() },

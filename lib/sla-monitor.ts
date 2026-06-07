@@ -1,7 +1,7 @@
 import { readBoard, writeBoard } from "./board";
 import { createJournalEntry } from "./journal";
 import { computeSlaStatus } from "./sla";
-import { dispatchWebhooks } from "./webhooks";
+import { emitCardEvent } from "./services/event-bus";
 import type { Card } from "./types";
 
 async function notifySlaBreach(card: Card): Promise<Card> {
@@ -22,7 +22,7 @@ async function notifySlaBreach(card: Card): Promise<Card> {
     sla,
   };
 
-  const results = await dispatchWebhooks(payload);
+  const results = await emitCardEvent(payload);
   let updated: Card = {
     ...card,
     slaBreachNotifiedAt: new Date().toISOString(),

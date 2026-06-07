@@ -1,6 +1,6 @@
 {
   "name": "cranbania",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "mcp": "tsx mcp/server.ts",
-    "test": "tsx --test lib/**/*.test.ts"
+    "sla:poll": "tsx scripts/sla-poller.ts",
+    "sla:poll:once": "tsx scripts/sla-poller.ts --once",
+    "test": "tsx --test lib/*.test.ts lib/services/*.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
