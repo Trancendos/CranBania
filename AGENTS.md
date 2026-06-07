@@ -93,6 +93,12 @@ npm test
 npm run build
 ```
 
+## Third-party CI checks
+
+GitHub Apps (CodeSlick, Debricked, Orange Pro AI, GitGuardian, etc.) may report on PRs independently of in-repo scripts. **Plan/scope/credit errors are org-config issues**, not PR bugs — see `docs/ci-third-party-checks.md`.
+
+Required in-repo gates before merge: `npm test`, `npm run lint`, `npm run build`.
+
 ## Cursor Cloud specific instructions
 
 - Use `npm` only (not Maven/Gradle). Node 18+ required.
