@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import CardDetailPanel from "@/components/CardDetailPanel";
 import type { Board, Card, Column, ColumnId } from "@/lib/types";
 
 async function fetchBoard(): Promise<Board> {
@@ -13,10 +14,12 @@ function CardItem({
   card,
   onMove,
   onDelete,
+  onSelect,
 }: {
   card: Card;
   onMove: (id: string, columnId: ColumnId) => void;
   onDelete: (id: string) => void;
+  onSelect: (card: Card) => void;
 }) {
   const columns: { id: ColumnId; label: string }[] = [
     { id: "backlog", label: "Backlog" },
@@ -31,12 +34,29 @@ function CardItem({
       className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm transition hover:border-[var(--accent)]"
       data-card-id={card.id}
     >
-      <h3 className="font-semibold leading-snug">{card.title}</h3>
-      {card.description ? (
-        <p className="mt-1 text-sm text-[var(--muted)] line-clamp-3">
-          {card.description}
-        </p>
-      ) : null}
+      <button
+        type="button"
+        className="w-full text-left"
+        onClick={() => onSelect(card)}
+      >
+        <h3 className="font-semibold leading-snug">{card.title}</h3>
+        {card.description ? (
+          <p className="mt-1 text-sm text-[var(--muted)] line-clamp-2">
+            {card.description}
+          </p>
+        ) : null}
+        <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
+          {card.journal.filter((j) => j.type === "comment").length > 0 ? (
+            <span>
+              💬 {card.journal.filter((j) => j.type === "comment").length}
+            </span>
+          ) : null}
+          {card.codeChanges.length > 0 ? (
+            <span>⌘ {card.codeChanges.length} diffs</span>
+          ) : null}
+          {card.worktree ? <span className="text-emerald-400">⎇ branch</span> : null}
+        </div>
+      </button>
       {card.tags.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1">
           {card.tags.map((tag) => (
@@ -67,6 +87,13 @@ function CardItem({
         </select>
         <button
           type="button"
+          className="rounded border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--surface-hover)]"
+          onClick={() => onSelect(card)}
+        >
+          Journal
+        </button>
+        <button
+          type="button"
           className="rounded border border-[var(--border)] px-2 py-1 text-xs text-red-400 hover:bg-red-950/30"
           onClick={() => onDelete(card.id)}
         >
@@ -82,11 +109,13 @@ function ColumnView({
   cards,
   onMove,
   onDelete,
+  onSelect,
 }: {
   column: Column;
   cards: Card[];
   onMove: (id: string, columnId: ColumnId) => void;
   onDelete: (id: string) => void;
+  onSelect: (card: Card) => void;
 }) {
   const columnCards = cards
     .filter((c) => c.columnId === column.id)
@@ -112,6 +141,7 @@ function ColumnView({
             card={card}
             onMove={onMove}
             onDelete={onDelete}
+            onSelect={onSelect}
           />
         ))}
         {columnCards.length === 0 ? (
@@ -130,11 +160,20 @@ export default function KanbanBoard() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [backlogCount, setBacklogCount] = useState(0);
 
   const reload = useCallback(async () => {
     try {
-      const data = await fetchBoard();
+      const [data, summaryRes] = await Promise.all([
+        fetchBoard(),
+        fetch("/api/summary"),
+      ]);
       setBoard(data);
+      if (summaryRes.ok) {
+        const summary = await summaryRes.json();
+        setBacklogCount(summary.backlogCount ?? 0);
+      }
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -170,15 +209,19 @@ export default function KanbanBoard() {
     await fetch(`/api/cards/${id}/move`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ columnId }),
+      body: JSON.stringify({ columnId, actor: "human" }),
     });
     await reload();
   }
 
   async function handleDelete(id: string) {
     await fetch(`/api/cards/${id}`, { method: "DELETE" });
+    if (selectedId === id) setSelectedId(null);
     await reload();
   }
+
+  const selectedCard =
+    board?.cards.find((c) => c.id === selectedId) ?? null;
 
   if (loading) {
     return (
@@ -201,12 +244,12 @@ export default function KanbanBoard() {
       <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-medium text-[var(--accent)]">
-            AI-agent ready
+            AI-agent ready · journal · worktrees · webhooks
           </p>
           <h1 className="text-3xl font-bold tracking-tight">CranBania</h1>
           <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Kanban for humans and AI agents. Claude, Cursor, and other tools
-            can read and update cards via REST API or MCP.
+            Backlog ({backlogCount} items) · cards carry audit journal, comments,
+            code diffs, and isolated git worktrees when moved to In Progress.
           </p>
         </div>
         <form
@@ -215,7 +258,7 @@ export default function KanbanBoard() {
         >
           <input
             className="rounded border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-            placeholder="New card title"
+            placeholder="New card title → Backlog"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
@@ -243,17 +286,27 @@ export default function KanbanBoard() {
             cards={board.cards}
             onMove={handleMove}
             onDelete={handleDelete}
+            onSelect={(c) => setSelectedId(c.id)}
           />
         ))}
       </div>
 
+      {selectedCard ? (
+        <CardDetailPanel
+          card={selectedCard}
+          onClose={() => setSelectedId(null)}
+          onUpdated={reload}
+        />
+      ) : null}
+
       <footer className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--muted)]">
-        <strong className="text-[var(--foreground)]">For AI agents:</strong>{" "}
-        <code className="text-[var(--accent)]">GET /api/board</code>,{" "}
-        <code className="text-[var(--accent)]">POST /api/cards</code>,{" "}
-        <code className="text-[var(--accent)]">POST /api/cards/:id/move</code>
+        <strong className="text-[var(--foreground)]">Agent APIs:</strong>{" "}
+        <code className="text-[var(--accent)]">GET /api/backlog</code>,{" "}
+        <code className="text-[var(--accent)]">POST /api/cards/:id/comments</code>,{" "}
+        <code className="text-[var(--accent)]">POST /api/cards/:id/code-changes</code>,{" "}
+        <code className="text-[var(--accent)]">GET /api/cards/:id/journal</code>
         {" · "}
-        MCP: <code className="text-[var(--accent)]">npm run mcp</code>
+        Webhooks fire on <code className="text-[var(--accent)]">in_progress</code>
       </footer>
     </div>
   );

@@ -3,10 +3,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
+  addCodeChange,
+  addComment,
   createCard,
   deleteCard,
   getBoardSummary,
   getCard,
+  getCardJournal,
+  listBacklog,
   listCards,
   moveCard,
   readBoard,
@@ -18,7 +22,7 @@ const columnIdSchema = z.enum(COLUMN_IDS as [string, ...string[]]);
 
 const server = new McpServer({
   name: "cranbania",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 server.tool(
@@ -46,6 +50,84 @@ server.tool(
     const summary = await getBoardSummary();
     return {
       content: [{ type: "text" as const, text: JSON.stringify(summary, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "list_backlog",
+  "List all cards in the Backlog column",
+  {},
+  async () => {
+    const cards = await listBacklog();
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ cards }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "get_journal",
+  "Get the full audit journal for a card",
+  { id: z.string() },
+  async ({ id }) => {
+    const journal = await getCardJournal(id);
+    if (!journal) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ journal }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "add_comment",
+  "Add a comment/note to a card",
+  {
+    id: z.string(),
+    message: z.string().min(1),
+    actor: z.string().optional(),
+  },
+  async ({ id, message, actor }) => {
+    const card = await addComment(id, message, actor);
+    if (!card) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ card }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "add_code_change",
+  "Record code added, edited, or deleted on a card",
+  {
+    id: z.string(),
+    filePath: z.string().min(1),
+    changeType: z.enum(["added", "edited", "deleted"]),
+    content: z.string(),
+    previousContent: z.string().optional(),
+    language: z.string().optional(),
+    actor: z.string().optional(),
+  },
+  async ({ id, ...input }) => {
+    const card = await addCodeChange(id, input);
+    if (!card) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ card }, null, 2) }],
     };
   },
 );
@@ -136,7 +218,9 @@ server.tool(
     order: z.number().int().min(0).optional(),
   },
   async ({ id, columnId, order }) => {
-    const card = await moveCard(id, columnId as ColumnId, order);
+    const card = await moveCard(id, columnId as ColumnId, order, {
+      actor: "mcp",
+    });
     if (!card) {
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],

@@ -4,7 +4,7 @@ Guidance for AI coding agents working in CranBania.
 
 ## Project
 
-**CranBania** is an AI-agent-ready Kanban board (Next.js + JSON file store + MCP server).
+**CranBania** — AI-agent-ready Kanban with per-card journal, code diffs, git worktrees, and webhooks.
 
 ## Cursor Cloud specific instructions
 
@@ -13,14 +13,7 @@ Guidance for AI coding agents working in CranBania.
 | Service | Command | Port |
 |---------|---------|------|
 | Web + API | `npm run dev` | 3000 |
-| MCP server | `npm run mcp` | stdio (no port) |
-
-Start the dev server in tmux before manual browser testing:
-
-```bash
-SESSION_NAME="cranbania-dev"; tmux -f /exec-daemon/tmux.portal.conf has-session -t "=$SESSION_NAME" 2>/dev/null || tmux -f /exec-daemon/tmux.portal.conf new-session -d -s "$SESSION_NAME" -c "$PWD" -- "${SHELL:-zsh}" -l
-tmux -f /exec-daemon/tmux.portal.conf send-keys -t "$SESSION_NAME:0.0" 'npm run dev' C-m
-```
+| MCP server | `npm run mcp` | stdio |
 
 ### Lint / test / build
 
@@ -31,19 +24,23 @@ npm test
 npm run build
 ```
 
-### Agent workflow on this board
+### Agent workflow
 
-Agents can operate CranBania without a human UI:
-
-1. `GET /api/board` or MCP `list_board` — read backlog
-2. MCP `create_card` or `POST /api/cards` — add work
-3. MCP `move_card` or `POST /api/cards/:id/move` — advance status
-4. MCP `update_card` — add notes, assignee (`claude`, `cursor`, etc.)
+1. `list_backlog` or `GET /api/backlog` — pick work
+2. `move_card` → `in_progress` — creates git worktree + fires webhooks
+3. Work in `data/worktrees/<card-id>/` on branch `card/<id>-<slug>`
+4. `add_code_change` — record file diffs on the card
+5. `add_comment` — notes and handoff context
+6. `move_card` → `review` then `done`
 
 Column IDs: `backlog`, `planning`, `in_progress`, `review`, `done`.
 
+### Webhooks
+
+Configure via `POST /api/webhooks` or `CRANBANIA_WEBHOOK_URLS` env var. Fires on `card.in_progress` only.
+
 ### Gotchas
 
-- Board data lives in `data/board.json`; reset by deleting that file.
-- MCP server must run from repo root so `data/` resolves correctly.
-- Dev server hot-reloads API changes; UI polls every 5s for external agent updates.
+- Board data: `data/board.json`; webhooks: `data/webhooks.json`; worktrees: `data/worktrees/`
+- Moving to `in_progress` without git repo logs a journal entry but skips worktree
+- Journal is the single source of truth for audit + comments + code events

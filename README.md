@@ -1,18 +1,30 @@
 # CranBania
 
-**Kanban board built for humans and AI agents.**
-
-CranBania is a lightweight Kanban board where Claude, Cursor, GPT, Gemini, or any MCP-capable agent can pull tasks, update status, and move cards through your workflow — the same way Nimbalyst and Agetor orchestrate agents, but as your own open-source board.
+**Kanban board built for humans and AI agents** — with per-card journal, code diffs, git worktrees, and webhooks.
 
 ## Columns
 
-| Column | Purpose |
-|--------|---------|
-| **Backlog** | Incoming work |
-| **Planning** | Specs and breakdown |
-| **In Progress** | Active agent/human work |
-| **Review** | Ready for human or AI review |
-| **Done** | Completed |
+| Column | Purpose | Side effects |
+|--------|---------|--------------|
+| **Backlog** | Incoming work (default for new cards) | — |
+| **Planning** | Specs and breakdown | — |
+| **In Progress** | Active agent/human work | **Git worktree** + **webhooks** |
+| **Review** | Human or AI review | — |
+| **Done** | Completed | — |
+
+## Per-card journal (recommended)
+
+Each card carries a unified **journal** — audit log + comments + code events:
+
+| Entry type | What it records |
+|------------|-----------------|
+| `created` / `moved` / `updated` | Board changes |
+| `comment` | Notes from humans or agents |
+| `code_change` | File diffs (added / edited / deleted segments) |
+| `worktree` | Git branch isolation when entering In Progress |
+| `webhook` | Delivery status for external triggers |
+
+**Yes — a journal per card is worth it.** It gives agents continuity without a separate ticketing system.
 
 ## Quick start
 
@@ -21,93 +33,78 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Click a card to open its journal panel.
 
-## REST API (any AI with HTTP access)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/board` | Full board state |
-| `GET` | `/api/summary` | Card counts per column |
-| `GET` | `/api/cards?columnId=in_progress` | List cards |
-| `POST` | `/api/cards` | Create card `{ "title", "description?", "columnId?", "assignee?", "tags?" }` |
-| `GET` | `/api/cards/:id` | Get one card |
-| `PATCH` | `/api/cards/:id` | Update fields |
-| `POST` | `/api/cards/:id/move` | Move `{ "columnId": "review" }` |
-| `DELETE` | `/api/cards/:id` | Delete card |
-
-### Example: agent picks up a task
+### Webhooks (on `in_progress`)
 
 ```bash
-# Create task
-curl -s -X POST http://localhost:3000/api/cards \
+# Register a webhook
+curl -X POST http://localhost:3000/api/webhooks \
   -H 'Content-Type: application/json' \
-  -d '{"title":"Add dark mode","assignee":"claude","tags":["feature"]}'
+  -d '{"url":"https://your-agent-runner.example/hook"}'
 
-# Move to in progress
-curl -s -X POST http://localhost:3000/api/cards/<ID>/move \
-  -H 'Content-Type: application/json' \
-  -d '{"columnId":"in_progress"}'
-
-# Mark done
-curl -s -X POST http://localhost:3000/api/cards/<ID>/move \
-  -H 'Content-Type: application/json' \
-  -d '{"columnId":"done"}'
+# Or set env (comma-separated)
+export CRANBANIA_WEBHOOK_URLS="https://hook1.example,https://hook2.example"
 ```
 
-## MCP server (Claude Desktop, Cursor, etc.)
-
-```bash
-npm run mcp
-```
-
-Add to your MCP config (see `.cursor/mcp.example.json`):
+Payload:
 
 ```json
 {
-  "mcpServers": {
-    "cranbania": {
-      "command": "npm",
-      "args": ["run", "mcp"],
-      "cwd": "/path/to/CranBania"
-    }
-  }
+  "event": "card.in_progress",
+  "card": { "id", "title", "worktree": { "path", "branch" } }
 }
 ```
 
-### MCP tools
+### Git worktree per card
 
-- `list_board` — full board JSON
-- `board_summary` — counts per column
-- `list_cards` — optional column filter
-- `get_card` / `create_card` / `update_card` / `move_card` / `delete_card`
+When a card moves to **In Progress**, CranBania creates:
+
+- Branch: `card/<short-id>-<slugified-title>`
+- Worktree: `data/worktrees/<card-id>/`
+
+Agents can work in isolation without touching your main checkout.
+
+## REST API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/backlog` | Backlog cards only |
+| `GET` | `/api/board` | Full board |
+| `GET` | `/api/cards/:id/journal` | Audit log |
+| `POST` | `/api/cards/:id/comments` | `{ "message", "actor?" }` |
+| `POST` | `/api/cards/:id/code-changes` | `{ "filePath", "changeType", "content", ... }` |
+| `POST` | `/api/cards/:id/move` | `{ "columnId", "actor?" }` — triggers worktree + webhooks on `in_progress` |
+| `GET/POST` | `/api/webhooks` | Webhook config |
+
+## MCP tools
+
+`npm run mcp` — see `.cursor/mcp.example.json`
+
+Includes: `list_backlog`, `get_journal`, `add_comment`, `add_code_change`, `move_card`, …
+
+## Product scope: Agile / Prince2 / ITIL?
+
+| Scope | Worth building into CranBania? |
+|-------|-------------------------------|
+| **Card journal + code diffs** | ✅ Yes — core value for AI agents |
+| **Kanban + backlog** | ✅ Yes — already here |
+| **Git worktree + webhooks** | ✅ Yes — agent orchestration |
+| **Full Agile ceremonies** | ⚠️ Later — sprints, velocity, burndown as optional modules |
+| **Prince2 stage gates** | ❌ Not yet — different audience; integrate via tags/columns first |
+| **Full ITSM / ITIL** | ❌ Not in v1 — use Jira/ServiceNow + MCP sync instead |
+
+**Recommendation:** Keep CranBania focused as an **agent-native task board**. Add ITIL/Prince2 only when you have a concrete customer need — otherwise you rebuild ServiceNow poorly.
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Dev server (port 3000) |
-| `npm run build` | Production build |
-| `npm run start` | Production server |
-| `npm run lint` | ESLint |
-| `npm test` | Unit tests |
-| `npm run mcp` | MCP stdio server |
-
-## Data
-
-Board state is stored in `data/board.json` (gitignored). Delete it to reset.
-
-## How this compares to Nimbalyst / Agetor
-
-| Feature | CranBania | Nimbalyst | Agetor |
-|---------|-----------|-----------|--------|
-| Kanban UI | ✅ | ✅ | ✅ |
-| MCP / API for agents | ✅ | Partial | ✅ |
-| Git worktrees | — | ✅ | ✅ |
-| Visual diffs | — | ✅ | — |
-| Self-hosted & free | ✅ | ✅ | ✅ |
-
-CranBania focuses on being a **simple, agent-native task board** you own. Pair it with your IDE or orchestrator for git isolation and code review.
+```bash
+npm run dev      # port 3000
+npm run mcp      # MCP stdio
+npm test
+npm run lint
+npm run build
+```
 
 ## License
 

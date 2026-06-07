@@ -37,3 +37,5 @@ next-env.d.ts
 
 # data (local board state — optional to commit seed)
 /data/board.json
+/data/webhooks.json
+/data/worktrees/

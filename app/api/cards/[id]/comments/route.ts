@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { moveCard } from "@/lib/board";
-import { COLUMN_IDS, type ColumnId } from "@/lib/types";
+import { addComment } from "@/lib/board";
 
-const moveSchema = z.object({
-  columnId: z.enum(COLUMN_IDS as [string, ...string[]]),
-  order: z.number().int().min(0).optional(),
+const schema = z.object({
+  message: z.string().min(1),
   actor: z.string().optional(),
 });
 
@@ -15,21 +13,16 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const parsed = moveSchema.safeParse(body);
+  const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid request", details: parsed.error.flatten() },
       { status: 400 },
     );
   }
-  const card = await moveCard(
-    id,
-    parsed.data.columnId as ColumnId,
-    parsed.data.order,
-    { actor: parsed.data.actor },
-  );
+  const card = await addComment(id, parsed.data.message, parsed.data.actor);
   if (!card) {
     return NextResponse.json({ error: "Card not found" }, { status: 404 });
   }
-  return NextResponse.json({ card });
+  return NextResponse.json({ card }, { status: 201 });
 }
