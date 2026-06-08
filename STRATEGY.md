@@ -20,6 +20,7 @@ Paid tools may be used optionally by teams, but **CranBania will not depend on t
 | Jira incidents | `cardType: incident` + SLA timers |
 | ServiceNow change | `cardType: change` + journal audit trail |
 | ServiceNow CMDB | Out of scope — use tags + description + export JSON |
+| Lucidchart / Miro | Built-in **Visual boards** at `/visual` + MCP |
 | Prince2 tool | **Prince2-lite stages** on cards (`starting_up` → `closing`) |
 | Agent orchestrators (paid) | MCP + REST + webhooks + git worktrees |
 
@@ -56,6 +57,14 @@ Paid tools may be used optionally by teams, but **CranBania will not depend on t
 - **API key middleware** for mutating routes
 - Event bus + JSON migrations + automation status API
 - MCP: `get_automation_status`, `run_sla_check`
+
+### Track 7 — Visual collaboration (v0.6.0)
+
+- Lucidchart / Miro-style boards — shapes, stickies, frames, connectors
+- Templates: flowchart, mindmap, retro, architecture, whiteboard
+- REST + MCP for AI agents (`replace_visual_canvas` for batch diagram updates)
+- Included in workspace export v3 (`visualBoards`)
+- **Not building:** real-time multiplayer cursors, paid diagram SaaS sync
 
 See `docs/architecture.md` and `docs/automation-recipes.md`.
 

@@ -10,6 +10,12 @@ export default function AppNav() {
         Board
       </Link>
       <Link
+        href="/visual"
+        className="rounded border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-1.5 backdrop-blur hover:bg-[var(--surface-hover)]"
+      >
+        Visual
+      </Link>
+      <Link
         href="/incidents"
         className="rounded border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-1.5 backdrop-blur hover:bg-[var(--surface-hover)]"
       >

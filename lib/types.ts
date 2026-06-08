@@ -149,10 +149,11 @@ export interface WebhooksFile {
 }
 
 export interface WorkspaceExport {
-  version: 2;
+  version: 2 | 3;
   exportedAt: string;
   board: Board;
   workspace: WorkspaceData;
+  visualBoards?: import("./visual-types").VisualBoard[];
   /** Zero-cost mandate: no external SaaS IDs */
   zeroCost: true;
 }

@@ -23,13 +23,27 @@ import { exportWorkspace } from "../lib/export";
 import { buildAutomationStatus } from "../lib/automation/status";
 import { runSlaChecks } from "../lib/sla-monitor";
 import { createEpic, createSprint } from "../lib/workspace";
+import {
+  addVisualEdge,
+  addVisualNode,
+  createVisualBoard,
+  deleteVisualBoard,
+  deleteVisualEdge,
+  deleteVisualNode,
+  getVisualBoard,
+  listVisualBoards,
+  replaceVisualCanvas,
+  updateVisualBoard,
+  updateVisualNode,
+} from "../lib/visual-board";
+import { VISUAL_BOARD_TYPES, VISUAL_NODE_KINDS } from "../lib/visual-types";
 import { CARD_TYPES, COLUMN_IDS, type CardType, type ColumnId } from "../lib/types";
 
 const columnIdSchema = z.enum(COLUMN_IDS as [string, ...string[]]);
 
 const server = new McpServer({
   name: "cranbania",
-  version: "0.5.0",
+  version: "0.6.0",
 });
 
 server.tool(
@@ -373,6 +387,275 @@ server.tool(
           ),
         },
       ],
+    };
+  },
+);
+
+server.tool(
+  "list_visual_boards",
+  "List Lucid/Miro-style visual boards (whiteboard, flowchart, mindmap, retro, architecture)",
+  {
+    boardType: z
+      .enum(VISUAL_BOARD_TYPES as [string, ...string[]])
+      .optional()
+      .describe("Filter by board template type"),
+    linkedCardId: z.string().uuid().optional().describe("Filter boards linked to a Kanban card"),
+  },
+  async (filters) => {
+    const boards = await listVisualBoards(filters);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ boards }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "get_visual_board",
+  "Get a visual board with all nodes and edges",
+  { id: z.string().uuid() },
+  async ({ id }) => {
+    const board = await getVisualBoard(id);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "create_visual_board",
+  "Create a visual board with optional template (flowchart, mindmap, retro, architecture, whiteboard)",
+  {
+    title: z.string().min(1),
+    description: z.string().optional(),
+    boardType: z.enum(VISUAL_BOARD_TYPES as [string, ...string[]]).optional(),
+    linkedCardId: z.string().uuid().optional(),
+    linkedEpicId: z.string().uuid().optional(),
+  },
+  async (input) => {
+    const board = await createVisualBoard(input);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "update_visual_board",
+  "Update board metadata or viewport (pan/zoom)",
+  {
+    id: z.string().uuid(),
+    title: z.string().min(1).optional(),
+    description: z.string().optional(),
+    viewport: z
+      .object({ x: z.number(), y: z.number(), zoom: z.number().positive() })
+      .optional(),
+    linkedCardId: z.string().uuid().nullable().optional(),
+    linkedEpicId: z.string().uuid().nullable().optional(),
+  },
+  async ({ id, ...input }) => {
+    const board = await updateVisualBoard(id, input);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "delete_visual_board",
+  "Delete a visual board",
+  { id: z.string().uuid() },
+  async ({ id }) => {
+    const ok = await deleteVisualBoard(id);
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(ok ? { deleted: id } : { error: "Not found" }),
+        },
+      ],
+      isError: !ok,
+    };
+  },
+);
+
+server.tool(
+  "add_visual_node",
+  "Add a shape or sticky to a visual board (rectangle, diamond, ellipse, sticky, frame, etc.)",
+  {
+    boardId: z.string().uuid(),
+    kind: z.enum(VISUAL_NODE_KINDS as [string, ...string[]]),
+    x: z.number(),
+    y: z.number(),
+    width: z.number().positive().optional(),
+    height: z.number().positive().optional(),
+    text: z.string().optional(),
+    color: z.string().optional(),
+    cardId: z.string().uuid().optional().describe("Link node to a Kanban card"),
+  },
+  async ({ boardId, ...input }) => {
+    const board = await addVisualNode(boardId, input);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "update_visual_node",
+  "Move or edit a node on a visual board",
+  {
+    boardId: z.string().uuid(),
+    nodeId: z.string().uuid(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    width: z.number().positive().optional(),
+    height: z.number().positive().optional(),
+    text: z.string().optional(),
+    color: z.string().optional(),
+    cardId: z.string().uuid().nullable().optional(),
+  },
+  async ({ boardId, nodeId, ...input }) => {
+    const board = await updateVisualNode(boardId, nodeId, input);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "delete_visual_node",
+  "Remove a node and its connected edges from a visual board",
+  {
+    boardId: z.string().uuid(),
+    nodeId: z.string().uuid(),
+  },
+  async ({ boardId, nodeId }) => {
+    const board = await deleteVisualNode(boardId, nodeId);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "add_visual_edge",
+  "Connect two nodes with an arrow/line (flowchart style)",
+  {
+    boardId: z.string().uuid(),
+    fromNodeId: z.string().uuid(),
+    toNodeId: z.string().uuid(),
+    label: z.string().optional(),
+    style: z.enum(["solid", "dashed", "dotted"]).optional(),
+  },
+  async ({ boardId, ...input }) => {
+    const board = await addVisualEdge(boardId, input);
+    if (!board) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({ error: "Board or node not found" }),
+          },
+        ],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "delete_visual_edge",
+  "Remove a connector between nodes",
+  {
+    boardId: z.string().uuid(),
+    edgeId: z.string().uuid(),
+  },
+  async ({ boardId, edgeId }) => {
+    const board = await deleteVisualEdge(boardId, edgeId);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "replace_visual_canvas",
+  "Replace all nodes and edges at once (batch diagram updates for AI agents)",
+  {
+    boardId: z.string().uuid(),
+    nodes: z.array(
+      z.object({
+        id: z.string().uuid(),
+        kind: z.enum(VISUAL_NODE_KINDS as [string, ...string[]]),
+        x: z.number(),
+        y: z.number(),
+        width: z.number(),
+        height: z.number(),
+        text: z.string(),
+        color: z.string().optional(),
+        cardId: z.string().uuid().optional(),
+        parentFrameId: z.string().uuid().optional(),
+      }),
+    ),
+    edges: z.array(
+      z.object({
+        id: z.string().uuid(),
+        fromNodeId: z.string().uuid(),
+        toNodeId: z.string().uuid(),
+        label: z.string().optional(),
+        style: z.enum(["solid", "dashed", "dotted"]).optional(),
+      }),
+    ),
+  },
+  async ({ boardId, nodes, edges }) => {
+    const board = await replaceVisualCanvas(boardId, nodes, edges);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
     };
   },
 );

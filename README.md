@@ -12,6 +12,7 @@ See [STRATEGY.md](./STRATEGY.md) for the £0 mandate and roadmap.
 | ServiceNow incidents | `cardType: incident` + SLA (default 4h) |
 | ServiceNow changes | `cardType: change` + SLA (default 72h) |
 | Prince2 tooling | `prince2Stage` on each card |
+| Lucidchart / Miro | `/visual` boards + `/api/visual-boards` + MCP |
 | Paid backups | `GET /api/export` JSON |
 
 ## Columns
@@ -46,6 +47,9 @@ Incidents/changes get automatic SLA due dates. Journal records breaches.
 | `GET /api/itsm/changes` | Change records |
 | `GET /api/itsm/sla` | SLA report |
 | `GET /api/governance/prince2` | Stage overview |
+| `GET/POST /api/visual-boards` | Visual boards (Lucid/Miro-style) |
+| `GET/PATCH/DELETE /api/visual-boards/:id` | Board + canvas |
+| `GET /visual` | Visual board UI |
 | `GET /api/export` | Full backup |
 | `POST /api/import` | Restore merge/replace |
 
@@ -74,7 +78,7 @@ Architecture and Convex-skill mapping: [docs/architecture.md](./docs/architectur
 npm run mcp
 ```
 
-New tools: `create_epic`, `create_sprint`, `list_incidents`, `get_sla_report`, `export_workspace`, …
+New tools: `create_epic`, `create_sprint`, `list_incidents`, `get_sla_report`, `export_workspace`, `create_visual_board`, `add_visual_node`, `replace_visual_canvas`, …
 
 ## Scripts
 

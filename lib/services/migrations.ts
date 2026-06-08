@@ -4,9 +4,11 @@
 
 import type { Board, Card, WorkspaceData } from "../types";
 import { migrateCard } from "../types";
+import { defaultViewport, type VisualBoard, type VisualBoardsFile } from "../visual-types";
 
 export const BOARD_DATA_VERSION = 3;
 export const WORKSPACE_DATA_VERSION = 2;
+export const VISUAL_BOARD_DATA_VERSION = 1;
 
 export interface StoredBoard extends Board {
   version?: number;
@@ -53,4 +55,34 @@ export function stampBoard(board: Board): StoredBoard {
 
 export function stampWorkspace(ws: WorkspaceData): StoredWorkspace {
   return { ...ws, version: WORKSPACE_DATA_VERSION };
+}
+
+export type StoredVisualBoards = VisualBoardsFile;
+
+function migrateVisualBoard(board: Partial<VisualBoard>): VisualBoard {
+  const createdAt = board.createdAt ?? new Date().toISOString();
+  return {
+    id: board.id ?? "",
+    title: board.title ?? "Untitled board",
+    description: board.description ?? "",
+    boardType: board.boardType ?? "whiteboard",
+    nodes: board.nodes ?? [],
+    edges: board.edges ?? [],
+    viewport: board.viewport ?? defaultViewport(),
+    linkedCardId: board.linkedCardId,
+    linkedEpicId: board.linkedEpicId,
+    createdAt,
+    updatedAt: board.updatedAt ?? createdAt,
+  };
+}
+
+export function migrateVisualBoards(raw: Partial<StoredVisualBoards>): StoredVisualBoards {
+  return {
+    version: VISUAL_BOARD_DATA_VERSION,
+    boards: (raw.boards ?? []).map((b) => migrateVisualBoard(b)),
+  };
+}
+
+export function stampVisualBoards(data: { boards: VisualBoard[] }): StoredVisualBoards {
+  return { ...data, version: VISUAL_BOARD_DATA_VERSION };
 }

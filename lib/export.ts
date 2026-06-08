@@ -1,4 +1,5 @@
 import { readBoard, writeBoard } from "./board";
+import { readVisualBoards, writeAllVisualBoards } from "./visual-board";
 import { readWebhooks, writeWebhooks } from "./webhooks";
 import { readWorkspace, writeWorkspace } from "./workspace";
 import type { WorkspaceExport } from "./types";
@@ -6,11 +7,13 @@ import type { WorkspaceExport } from "./types";
 export async function exportWorkspace(): Promise<WorkspaceExport> {
   const board = await readBoard();
   const workspace = await readWorkspace();
+  const visualBoards = await readVisualBoards();
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     board,
     workspace,
+    visualBoards,
     zeroCost: true,
   };
 }
@@ -18,18 +21,22 @@ export async function exportWorkspace(): Promise<WorkspaceExport> {
 export async function importWorkspace(
   data: WorkspaceExport,
   mode: "merge" | "replace" = "merge",
-): Promise<{ cards: number; epics: number; sprints: number }> {
-  if (data.version !== 2) {
+): Promise<{ cards: number; epics: number; sprints: number; visualBoards: number }> {
+  if (data.version !== 2 && data.version !== 3) {
     throw new Error("Unsupported export version");
   }
 
   if (mode === "replace") {
     await writeBoard(data.board);
     await writeWorkspace(data.workspace);
+    if (data.visualBoards) {
+      await writeAllVisualBoards(data.visualBoards);
+    }
     return {
       cards: data.board.cards.length,
       epics: data.workspace.epics.length,
       sprints: data.workspace.sprints.length,
+      visualBoards: data.visualBoards?.length ?? 0,
     };
   }
 
@@ -46,10 +53,20 @@ export async function importWorkspace(
   ws.sprints.push(...data.workspace.sprints.filter((s) => !sprintIds.has(s.id)));
   await writeWorkspace(ws);
 
+  let visualCount = 0;
+  if (data.visualBoards?.length) {
+    const existing = await readVisualBoards();
+    const ids = new Set(existing.map((b) => b.id));
+    const merged = [...existing, ...data.visualBoards.filter((b) => !ids.has(b.id))];
+    visualCount = merged.length - existing.length;
+    await writeAllVisualBoards(merged);
+  }
+
   return {
     cards: newCards.length,
     epics: data.workspace.epics.length,
     sprints: data.workspace.sprints.length,
+    visualBoards: visualCount,
   };
 }
 

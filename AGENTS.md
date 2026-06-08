@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## CranBania v0.5.0 — Forgejo agents + API auth
+## CranBania v0.6.0 — Visual boards + Forgejo agents + API auth
 
 **Mandate:** no Jira, ServiceNow, or paid SaaS. **Not Convex** — see `docs/architecture.md`.
 
@@ -13,6 +13,7 @@
 | Web + API | `npm run dev` | 3000 |
 | MCP | `npm run mcp` | stdio |
 | Incident queue UI | `/incidents` | 3000 |
+| **Visual boards** | `/visual` | 3000 |
 | **SLA poller** | `npm run sla:poll` | sidecar |
 | **App + poller** | `npm run start:full` | 3000 + sidecar |
 | Automation status | `GET /api/automation/status` | 3000 |
@@ -54,6 +55,24 @@ Details: `docs/automation-recipes.md`
 4. `add_code_change` + `add_comment`
 5. `get_sla_report` or `POST /api/itsm/sla/check` for breach/warning webhooks
 6. `export_workspace` for backup
+7. **Visual boards:** `create_visual_board`, `add_visual_node`, `add_visual_edge`, `replace_visual_canvas` — Lucid/Miro-style diagrams at `/visual`
+
+## Visual boards (v0.6.0)
+
+Lucidchart / Miro-style canvas — **zero SaaS**, JSON file storage.
+
+| REST | Purpose |
+|------|---------|
+| `GET/POST /api/visual-boards` | List / create boards |
+| `GET/PATCH/DELETE /api/visual-boards/:id` | Board CRUD + viewport |
+| `POST /api/visual-boards/:id/nodes` | Add shape/sticky |
+| `PATCH/DELETE .../nodes/:nodeId` | Move/edit/delete node |
+| `POST .../edges` | Connect nodes |
+| `PATCH /api/visual-boards/:id` + `{ nodes, edges }` | Full canvas replace |
+
+Board types: `whiteboard`, `flowchart`, `mindmap`, `retro`, `architecture`.
+
+MCP: `list_visual_boards`, `get_visual_board`, `create_visual_board`, `update_visual_board`, `delete_visual_board`, `add_visual_node`, `update_visual_node`, `delete_visual_node`, `add_visual_edge`, `delete_visual_edge`, `replace_visual_canvas`.
 
 ## Webhooks
 
@@ -71,6 +90,7 @@ Automation recipes: `docs/automation-recipes.md` (Forgejo, Woodpecker, n8n, syst
 
 - Kanban board `/` — sprint filter + **burndown chart** when sprint selected
 - Incident queue `/incidents` — ITSM-lite triage table
+- **Visual boards** `/visual` — pan/zoom canvas, shapes, stickies, connectors (Lucid/Miro-style)
 
 ## Card fields
 
@@ -83,6 +103,7 @@ Automation recipes: `docs/automation-recipes.md` (Forgejo, Woodpecker, n8n, syst
 
 - `data/board.json`
 - `data/workspace.json` (epics + sprints)
+- `data/visual-boards.json`
 - `data/webhooks.json`
 - `data/worktrees/`
 

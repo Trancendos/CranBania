@@ -39,4 +39,5 @@ next-env.d.ts
 /data/board.json
 /data/webhooks.json
 /data/workspace.json
+/data/visual-boards.json
 /data/worktrees/
