@@ -5,7 +5,10 @@ export type VisualBoardType =
   | "flowchart"
   | "mindmap"
   | "retro"
-  | "architecture";
+  | "architecture"
+  | "wireframe"
+  | "design_system"
+  | "roadmap";
 
 export type VisualNodeKind =
   | "rectangle"
@@ -15,7 +18,29 @@ export type VisualNodeKind =
   | "sticky"
   | "text"
   | "frame"
-  | "card_link";
+  | "card_link"
+  | "wire_heading"
+  | "wire_label"
+  | "wire_button"
+  | "wire_input"
+  | "wire_checkbox"
+  | "wire_nav"
+  | "wire_image"
+  | "wire_card"
+  | "wire_divider";
+
+/** Wireframe / UI kit node kinds for MCP and toolbar */
+export const WIREFRAME_NODE_KINDS: VisualNodeKind[] = [
+  "wire_heading",
+  "wire_label",
+  "wire_button",
+  "wire_input",
+  "wire_checkbox",
+  "wire_nav",
+  "wire_image",
+  "wire_card",
+  "wire_divider",
+];
 
 export type VisualEdgeStyle = "solid" | "dashed" | "dotted";
 
@@ -91,6 +116,9 @@ export const VISUAL_BOARD_TYPES: VisualBoardType[] = [
   "mindmap",
   "retro",
   "architecture",
+  "wireframe",
+  "design_system",
+  "roadmap",
 ];
 
 export const VISUAL_NODE_KINDS: VisualNodeKind[] = [
@@ -102,6 +130,7 @@ export const VISUAL_NODE_KINDS: VisualNodeKind[] = [
   "text",
   "frame",
   "card_link",
+  ...WIREFRAME_NODE_KINDS,
 ];
 
 export const DEFAULT_STICKY_COLOR = "#fef08a";

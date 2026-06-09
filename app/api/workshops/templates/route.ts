@@ -3,7 +3,15 @@ import { listWorkshopTemplates } from "@/lib/workshop";
 
 export async function GET(request: NextRequest) {
   const category = request.nextUrl.searchParams.get("category");
-  const valid = ["brainstorm", "retro", "analysis", "planning"] as const;
+  const valid = [
+    "brainstorm",
+    "retro",
+    "analysis",
+    "planning",
+    "roadmap",
+    "timeline",
+    "design",
+  ] as const;
   if (category && !valid.includes(category as (typeof valid)[number])) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }

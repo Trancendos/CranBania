@@ -17,7 +17,7 @@ const originalCwd = process.cwd();
 
 test("workshop template catalog includes SWOT and 5 Whys", () => {
   const templates = listWorkshopTemplates();
-  assert.ok(templates.length >= 15);
+  assert.ok(templates.length >= 25);
   assert.ok(getWorkshopTemplate("swot"));
   assert.ok(getWorkshopTemplate("five-whys"));
   assert.ok(getWorkshopTemplate("good-bad-ugly"));
@@ -84,6 +84,7 @@ test("start, populate, and record workshop to card", async () => {
     const recorded = await recordWorkshopOutcomes({
       boardId: board!.id,
       actor: "test-agent",
+      createFollowUpCards: false,
     });
     assert.ok(recorded);
     assert.equal(recorded!.board.workshop?.status, "completed");

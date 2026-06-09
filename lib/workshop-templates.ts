@@ -11,8 +11,33 @@ import {
   type VisualEdge,
   type VisualNode,
 } from "./visual-types";
+import {
+  DEFAULT_DESIGN_TOKENS,
+  createWireframeNode,
+  defaultMobileWireframeStack,
+  designTokenStickies,
+} from "./wireframe";
 
-export type WorkshopCategory = "brainstorm" | "retro" | "analysis" | "planning";
+export type WorkshopCategory =
+  | "brainstorm"
+  | "retro"
+  | "analysis"
+  | "planning"
+  | "roadmap"
+  | "timeline"
+  | "design";
+
+export type WorkshopLayout =
+  | "columns"
+  | "quadrants"
+  | "linear-down"
+  | "lean-grid"
+  | "timeline"
+  | "roadmap-horizontal"
+  | "timeline-horizontal"
+  | "wireframe-mobile"
+  | "wireframe-desktop"
+  | "design-system";
 
 export interface WorkshopZoneDef {
   id: string;
@@ -30,7 +55,11 @@ export interface WorkshopTemplate {
   zones: WorkshopZoneDef[];
   suggestedCardTypes?: CardType[];
   keywords?: string[];
-  layout: "columns" | "quadrants" | "linear-down" | "lean-grid" | "timeline";
+  layout: WorkshopLayout;
+  /** Zones whose stickies become follow-up Kanban cards when recording */
+  actionZoneIds?: string[];
+  /** Primary screen zone for wireframe population */
+  wireframeZoneId?: string;
 }
 
 export interface WorkshopCanvasContext {
@@ -303,6 +332,246 @@ function timelineLayout(
   return { nodes, edges: [], zones, anchorNodeId: anchorId };
 }
 
+function roadmapHorizontalLayout(
+  template: WorkshopTemplate,
+  ctx: WorkshopCanvasContext,
+): WorkshopCanvasResult {
+  const nodes: VisualNode[] = [];
+  const edges: VisualEdge[] = [];
+  const zones: WorkshopZoneBinding[] = [];
+  const sw = 220;
+  const sh = 320;
+  const anchorId = randomUUID();
+  nodes.push({
+    id: anchorId,
+    kind: "text",
+    x: ORIGIN_X,
+    y: 16,
+    width: template.zones.length * (sw + GAP),
+    height: 56,
+    text: anchorText(template, ctx),
+    meta: { isAnchor: true },
+  });
+
+  template.zones.forEach((zone, i) => {
+    const x = ORIGIN_X + i * (sw + GAP);
+    const frame = frameNode(zone, x, ORIGIN_Y, sw, sh);
+    nodes.push(frame);
+    nodes.push(placeholderSticky(zone, frame, 0));
+    nodes.push(placeholderSticky(zone, frame, 1));
+    zones.push({ id: zone.id, label: zone.label, frameNodeId: frame.id });
+    if (i > 0) {
+      const prev = zones[i - 1];
+      edges.push({
+        id: randomUUID(),
+        fromNodeId: prev.frameNodeId,
+        toNodeId: frame.id,
+        style: "dashed",
+      });
+    }
+  });
+
+  return { nodes, edges, zones, anchorNodeId: anchorId };
+}
+
+function timelineHorizontalLayout(
+  template: WorkshopTemplate,
+  ctx: WorkshopCanvasContext,
+): WorkshopCanvasResult {
+  const nodes: VisualNode[] = [];
+  const edges: VisualEdge[] = [];
+  const zones: WorkshopZoneBinding[] = [];
+  const pw = 180;
+  const ph = 200;
+  const anchorId = randomUUID();
+  nodes.push({
+    id: anchorId,
+    kind: "text",
+    x: ORIGIN_X,
+    y: 16,
+    width: 900,
+    height: 56,
+    text: anchorText(template, ctx),
+    meta: { isAnchor: true },
+  });
+
+  template.zones.forEach((zone, i) => {
+    const x = ORIGIN_X + i * (pw + 24);
+    const frame = frameNode(zone, x, ORIGIN_Y + 40, pw, ph);
+    nodes.push(frame);
+    nodes.push(placeholderSticky(zone, frame, 0));
+    zones.push({ id: zone.id, label: zone.label, frameNodeId: frame.id });
+    if (i > 0) {
+      edges.push({
+        id: randomUUID(),
+        fromNodeId: zones[i - 1].frameNodeId,
+        toNodeId: frame.id,
+        label: "→",
+      });
+    }
+  });
+
+  const axisY = ORIGIN_Y + 20;
+  nodes.push({
+    id: randomUUID(),
+    kind: "rectangle",
+    x: ORIGIN_X,
+    y: axisY,
+    width: template.zones.length * (pw + 24) - 24,
+    height: 4,
+    text: "",
+    color: "#64748b",
+    meta: { timelineAxis: true },
+  });
+
+  return { nodes, edges, zones, anchorNodeId: anchorId };
+}
+
+function wireframeMobileLayout(
+  template: WorkshopTemplate,
+  ctx: WorkshopCanvasContext,
+): WorkshopCanvasResult {
+  const nodes: VisualNode[] = [];
+  const zones: WorkshopZoneBinding[] = [];
+  const anchorId = randomUUID();
+  nodes.push({
+    id: anchorId,
+    kind: "text",
+    x: ORIGIN_X,
+    y: 16,
+    width: 700,
+    height: 56,
+    text: anchorText(template, ctx),
+    meta: { isAnchor: true },
+  });
+
+  const screenZone = template.zones.find((z) => z.id === "screen") ?? template.zones[0];
+  const screenFrame = frameNode(screenZone, ORIGIN_X + 40, ORIGIN_Y, 360, 640);
+  nodes.push(screenFrame);
+  nodes.push(...defaultMobileWireframeStack(screenFrame));
+  zones.push({ id: screenZone.id, label: screenZone.label, frameNodeId: screenFrame.id });
+
+  const notesZone = template.zones.find((z) => z.id === "annotations");
+  if (notesZone) {
+    const notesFrame = frameNode(notesZone, ORIGIN_X + 440, ORIGIN_Y, 280, 640);
+    nodes.push(notesFrame);
+    nodes.push(placeholderSticky(notesZone, notesFrame, 0));
+    nodes.push(placeholderSticky(notesZone, notesFrame, 1));
+    zones.push({ id: notesZone.id, label: notesZone.label, frameNodeId: notesFrame.id });
+  }
+
+  return { nodes, edges: [], zones, anchorNodeId: anchorId };
+}
+
+function wireframeDesktopLayout(
+  template: WorkshopTemplate,
+  ctx: WorkshopCanvasContext,
+): WorkshopCanvasResult {
+  const nodes: VisualNode[] = [];
+  const zones: WorkshopZoneBinding[] = [];
+  const anchorId = randomUUID();
+  nodes.push({
+    id: anchorId,
+    kind: "text",
+    x: ORIGIN_X,
+    y: 16,
+    width: 900,
+    height: 56,
+    text: anchorText(template, ctx),
+    meta: { isAnchor: true },
+  });
+
+  const chrome = frameNode(
+    { id: "chrome", label: "Browser / app chrome" },
+    ORIGIN_X,
+    ORIGIN_Y,
+    900,
+    520,
+  );
+  nodes.push(chrome);
+
+  const sidebar = frameNode(
+    template.zones.find((z) => z.id === "sidebar") ?? { id: "sidebar", label: "Sidebar" },
+    ORIGIN_X + 16,
+    ORIGIN_Y + 48,
+    180,
+    440,
+  );
+  nodes.push(sidebar);
+  zones.push({ id: "sidebar", label: "Sidebar", frameNodeId: sidebar.id });
+
+  const main = frameNode(
+    template.zones.find((z) => z.id === "main") ?? { id: "main", label: "Main content" },
+    ORIGIN_X + 210,
+    ORIGIN_Y + 48,
+    674,
+    440,
+  );
+  nodes.push(main);
+  zones.push({ id: "main", label: "Main content", frameNodeId: main.id });
+
+  nodes.push(
+    createWireframeNode("wire_nav", main.x + 16, main.y + 16, "App · Dashboard · Settings", {
+      width: main.width - 32,
+    }),
+  );
+  nodes.push(
+    createWireframeNode("wire_heading", main.x + 16, main.y + 72, ctx.cardTitle ?? "Page title", {
+      width: 320,
+    }),
+  );
+  nodes.push(
+    createWireframeNode("wire_card", main.x + 16, main.y + 120, "Primary content area", {
+      width: main.width - 32,
+      height: 200,
+    }),
+  );
+
+  for (const n of nodes.slice(-3)) {
+    n.parentFrameId = main.id;
+  }
+
+  return { nodes, edges: [], zones, anchorNodeId: anchorId };
+}
+
+function designSystemLayout(
+  template: WorkshopTemplate,
+  ctx: WorkshopCanvasContext,
+): WorkshopCanvasResult {
+  const nodes: VisualNode[] = [];
+  const zones: WorkshopZoneBinding[] = [];
+  const cw = 260;
+  const ch = 200;
+  const anchorId = randomUUID();
+  nodes.push({
+    id: anchorId,
+    kind: "text",
+    x: ORIGIN_X,
+    y: 16,
+    width: cw * 3 + GAP * 2,
+    height: 56,
+    text: anchorText(template, ctx),
+    meta: { isAnchor: true },
+  });
+
+  template.zones.forEach((zone, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const x = ORIGIN_X + col * (cw + GAP);
+    const y = ORIGIN_Y + row * (ch + GAP);
+    const frame = frameNode(zone, x, y, cw, ch);
+    nodes.push(frame);
+    if (zone.id === "colors" || zone.id === "typography") {
+      nodes.push(...designTokenStickies(frame, DEFAULT_DESIGN_TOKENS, zone.id));
+    } else {
+      nodes.push(placeholderSticky(zone, frame, 0));
+    }
+    zones.push({ id: zone.id, label: zone.label, frameNodeId: frame.id });
+  });
+
+  return { nodes, edges: [], zones, anchorNodeId: anchorId };
+}
+
 export function buildWorkshopCanvas(
   template: WorkshopTemplate,
   ctx: WorkshopCanvasContext = {},
@@ -316,6 +585,16 @@ export function buildWorkshopCanvas(
       return leanGridLayout(template, ctx);
     case "timeline":
       return timelineLayout(template, ctx);
+    case "roadmap-horizontal":
+      return roadmapHorizontalLayout(template, ctx);
+    case "timeline-horizontal":
+      return timelineHorizontalLayout(template, ctx);
+    case "wireframe-mobile":
+      return wireframeMobileLayout(template, ctx);
+    case "wireframe-desktop":
+      return wireframeDesktopLayout(template, ctx);
+    case "design-system":
+      return designSystemLayout(template, ctx);
     default:
       return columnsLayout(template, ctx);
   }
@@ -337,6 +616,7 @@ export const WORKSHOP_TEMPLATES: WorkshopTemplate[] = [
       { id: "themes", label: "Themes", hint: "Group similar ideas" },
       { id: "picks", label: "Top picks", hint: "Best candidates", stickyColor: "#bbf7d0" },
     ],
+    actionZoneIds: ["picks"],
   },
   {
     id: "ideastorm",
@@ -353,6 +633,7 @@ export const WORKSHOP_TEMPLATES: WorkshopTemplate[] = [
       { id: "vote", label: "Shortlist", hint: "Dot-vote winners", stickyColor: "#fde68a" },
       { id: "refine", label: "Refined concepts", hint: "Expand top picks", stickyColor: "#bbf7d0" },
     ],
+    actionZoneIds: ["refine"],
   },
   {
     id: "five-whys",
@@ -372,6 +653,7 @@ export const WORKSHOP_TEMPLATES: WorkshopTemplate[] = [
       { id: "why-5", label: "Why 5 / root cause" },
       { id: "action", label: "Corrective action", hint: "What will we do?", stickyColor: "#bbf7d0" },
     ],
+    actionZoneIds: ["action"],
   },
   {
     id: "good-bad-ugly",
@@ -388,6 +670,7 @@ export const WORKSHOP_TEMPLATES: WorkshopTemplate[] = [
       { id: "ugly", label: "Ugly", stickyColor: "#fde68a" },
       { id: "actions", label: "Actions", hint: "What we will change", stickyColor: "#93c5fd" },
     ],
+    actionZoneIds: ["actions"],
   },
   {
     id: "swot",
@@ -604,8 +887,183 @@ export const WORKSHOP_TEMPLATES: WorkshopTemplate[] = [
       { id: "concepts-2", label: "Concepts 5–8" },
       { id: "top-three", label: "Top 3", stickyColor: "#bbf7d0" },
     ],
+    actionZoneIds: ["top-three"],
+  },
+  {
+    id: "product-roadmap",
+    name: "Product Roadmap (Now / Next / Later)",
+    category: "roadmap",
+    description: "Horizon-based product roadmap swimlanes",
+    purpose: "Sequence initiatives across delivery horizons.",
+    layout: "roadmap-horizontal",
+    suggestedCardTypes: ["feature", "change"],
+    keywords: ["roadmap", "now next later", "horizon", "product"],
+    actionZoneIds: ["now", "next"],
+    zones: [
+      { id: "now", label: "Now", stickyColor: "#bbf7d0" },
+      { id: "next", label: "Next", stickyColor: "#93c5fd" },
+      { id: "later", label: "Later" },
+      { id: "ideas", label: "Ideas / parking lot", stickyColor: "#fde68a" },
+    ],
+  },
+  {
+    id: "quarterly-roadmap",
+    name: "Quarterly Roadmap",
+    category: "roadmap",
+    description: "Quarter-by-quarter delivery plan",
+    purpose: "Align epics and milestones to fiscal quarters.",
+    layout: "roadmap-horizontal",
+    suggestedCardTypes: ["feature"],
+    keywords: ["quarter", "q1", "q2", "roadmap", "plan"],
+    zones: [
+      { id: "q1", label: "Q1" },
+      { id: "q2", label: "Q2" },
+      { id: "q3", label: "Q3" },
+      { id: "q4", label: "Q4" },
+    ],
+  },
+  {
+    id: "release-timeline",
+    name: "Release Timeline",
+    category: "timeline",
+    description: "Phased release timeline left-to-right",
+    purpose: "Map milestones, dependencies, and launch phases.",
+    layout: "timeline-horizontal",
+    suggestedCardTypes: ["feature", "change"],
+    keywords: ["timeline", "release", "milestone", "phase", "launch"],
+    zones: [
+      { id: "phase-1", label: "Phase 1 · Discovery" },
+      { id: "phase-2", label: "Phase 2 · Build" },
+      { id: "phase-3", label: "Phase 3 · Beta" },
+      { id: "phase-4", label: "Phase 4 · GA" },
+    ],
+  },
+  {
+    id: "gantt-lite",
+    name: "Gantt Chart (Lite)",
+    category: "timeline",
+    description: "Week-based task lanes without heavy PM tooling",
+    purpose: "Visualize parallel workstreams across weeks.",
+    layout: "columns",
+    suggestedCardTypes: ["task", "feature"],
+    keywords: ["gantt", "schedule", "weeks", "parallel"],
+    zones: [
+      { id: "week-1", label: "Week 1" },
+      { id: "week-2", label: "Week 2" },
+      { id: "week-3", label: "Week 3" },
+      { id: "week-4", label: "Week 4" },
+    ],
+  },
+  {
+    id: "moscow",
+    name: "MoSCoW Prioritization",
+    category: "planning",
+    description: "Must / Should / Could / Won't prioritization",
+    purpose: "Scope features for a release or sprint.",
+    layout: "columns",
+    suggestedCardTypes: ["feature", "task"],
+    keywords: ["moscow", "must", "should", "prioritize", "scope"],
+    actionZoneIds: ["must", "should"],
+    zones: [
+      { id: "must", label: "Must have", stickyColor: "#bbf7d0" },
+      { id: "should", label: "Should have", stickyColor: "#93c5fd" },
+      { id: "could", label: "Could have" },
+      { id: "wont", label: "Won't have", stickyColor: "#fecaca" },
+    ],
+  },
+  {
+    id: "okr-board",
+    name: "OKR Board",
+    category: "planning",
+    description: "Objectives and key results alignment",
+    purpose: "Connect card work to measurable outcomes.",
+    layout: "columns",
+    suggestedCardTypes: ["feature"],
+    keywords: ["okr", "objective", "key result", "goal"],
+    zones: [
+      { id: "objective", label: "Objective", hint: "Qualitative goal" },
+      { id: "kr-1", label: "Key result 1" },
+      { id: "kr-2", label: "Key result 2" },
+      { id: "kr-3", label: "Key result 3" },
+      { id: "initiatives", label: "Initiatives", stickyColor: "#bbf7d0" },
+    ],
+    actionZoneIds: ["initiatives"],
+  },
+  {
+    id: "wireframe-mobile",
+    name: "Mobile Wireframe",
+    category: "design",
+    description: "Phone canvas with UX annotation column",
+    purpose: "Low-fi mobile UI flows linked to feature cards.",
+    layout: "wireframe-mobile",
+    wireframeZoneId: "screen",
+    suggestedCardTypes: ["feature"],
+    keywords: ["wireframe", "mobile", "ui", "ux", "mockup", "screen"],
+    zones: [
+      { id: "screen", label: "Mobile screen" },
+      { id: "annotations", label: "UX annotations", hint: "Notes & open questions" },
+    ],
+  },
+  {
+    id: "wireframe-desktop",
+    name: "Desktop Wireframe",
+    category: "design",
+    description: "Browser layout with sidebar and main panel",
+    purpose: "Desktop app or dashboard wireframes.",
+    layout: "wireframe-desktop",
+    wireframeZoneId: "main",
+    suggestedCardTypes: ["feature"],
+    keywords: ["wireframe", "desktop", "dashboard", "web app", "ui"],
+    zones: [
+      { id: "sidebar", label: "Sidebar navigation" },
+      { id: "main", label: "Main content" },
+    ],
+  },
+  {
+    id: "ui-design-system",
+    name: "UI Design System",
+    category: "design",
+    description: "Colors, typography, components, and spacing tokens",
+    purpose: "Document a product design system on canvas.",
+    layout: "design-system",
+    suggestedCardTypes: ["feature"],
+    keywords: ["design system", "tokens", "typography", "components", "style guide"],
+    zones: [
+      { id: "colors", label: "Colors" },
+      { id: "typography", label: "Typography" },
+      { id: "buttons", label: "Buttons" },
+      { id: "forms", label: "Forms & inputs" },
+      { id: "navigation", label: "Navigation" },
+      { id: "feedback", label: "Feedback & states" },
+    ],
+  },
+  {
+    id: "component-library",
+    name: "Component Library",
+    category: "design",
+    description: "Catalog UI patterns for reuse",
+    purpose: "Inventory buttons, cards, modals, and lists for dev handoff.",
+    layout: "columns",
+    suggestedCardTypes: ["feature", "task"],
+    keywords: ["component", "library", "pattern", "ui kit"],
+    zones: [
+      { id: "buttons", label: "Buttons" },
+      { id: "forms", label: "Form controls" },
+      { id: "data-display", label: "Data display" },
+      { id: "navigation", label: "Navigation" },
+      { id: "overlays", label: "Modals & overlays" },
+    ],
   },
 ];
+
+export function resolveActionZoneIds(template: WorkshopTemplate): string[] {
+  if (template.actionZoneIds?.length) return template.actionZoneIds;
+  return template.zones
+    .filter((z) =>
+      /action|mitigation|next|start|pick|top|quick|must|should|initiative|now/i.test(z.id),
+    )
+    .map((z) => z.id);
+}
 
 export const WORKSHOP_TEMPLATE_IDS = WORKSHOP_TEMPLATES.map((t) => t.id);
 

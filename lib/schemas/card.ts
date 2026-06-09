@@ -40,7 +40,14 @@ export const webhookRegisterSchema = z.object({
   enabled: z.boolean().optional().default(true),
   secret: z.string().optional(),
   events: z
-    .array(z.enum(["card.in_progress", "card.sla_warning", "card.sla_breach"]))
+    .array(
+      z.enum([
+        "card.in_progress",
+        "card.sla_warning",
+        "card.sla_breach",
+        "workshop.completed",
+      ]),
+    )
     .optional()
     .default(["card.in_progress", "card.sla_warning", "card.sla_breach"]),
 });

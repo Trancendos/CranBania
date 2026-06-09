@@ -61,11 +61,36 @@ export interface WebhookCardPayload {
   worktree?: { path: string; branch: string };
 }
 
+export function cardToWebhookPayload(card: {
+  id: string;
+  title: string;
+  description: string;
+  assignee?: string;
+  tags: string[];
+  cardType?: string;
+  priority?: string;
+  slaDueAt?: string;
+  worktree?: { path: string; branch: string };
+}): WebhookCardPayload {
+  return {
+    id: card.id,
+    title: card.title,
+    description: card.description,
+    assignee: card.assignee,
+    tags: card.tags,
+    cardType: card.cardType,
+    priority: card.priority,
+    slaDueAt: card.slaDueAt,
+    worktree: card.worktree,
+  };
+}
+
 export interface WebhookPayload {
   event: WebhookEvent;
   at: string;
   card: WebhookCardPayload;
   sla?: SlaStatus;
+  workshop?: import("./types").WebhookWorkshopDetail;
 }
 
 export interface WebhookResult {

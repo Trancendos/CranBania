@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## CranBania v0.7.0 — Workshop templates + visual boards
+## CranBania v0.8.0 — Workshops, roadmaps, wireframes
 
 **Mandate:** no Jira, ServiceNow, or paid SaaS. **Not Convex** — see `docs/architecture.md`.
 
@@ -56,7 +56,7 @@ Details: `docs/automation-recipes.md`
 5. `get_sla_report` or `POST /api/itsm/sla/check` for breach/warning webhooks
 6. `export_workspace` for backup
 7. **Visual boards:** `create_visual_board`, `add_visual_node`, `add_visual_edge`, `replace_visual_canvas` — Lucid/Miro-style diagrams at `/visual`
-8. **Workshops from cards:** `suggest_workshop_for_card` → `start_workshop_from_card` → `populate_workshop_zones` → `record_workshop_outcomes`
+8. **Workshops from cards:** `run_workshop_for_card` (one-shot) or suggest → start → populate → record
 
 ## Visual boards (v0.6.0)
 
@@ -79,15 +79,19 @@ MCP: `list_visual_boards`, `get_visual_board`, `create_visual_board`, `update_vi
 
 17 facilitation templates (SWOT, 5 Whys, Good/Bad/Ugly, ideastorm, fishbone, lean canvas, …) — AI can run a full cycle from a Kanban card.
 
+**Also:** product/quarterly **roadmaps**, **release timelines**, **MoSCoW**, **OKRs**, **mobile/desktop wireframes**, **UI design system**, component library (27 templates total).
+
 | Step | REST | MCP |
 |------|------|-----|
 | Suggest | `POST /api/workshops/suggest` | `suggest_workshop_for_card` |
+| **One-shot** | `POST /api/workshops/run` | `run_workshop_for_card` |
 | Start | `POST /api/workshops/start` | `start_workshop_from_card` |
 | Populate zones | `POST /api/workshops/:boardId/populate` | `populate_workshop_zones` |
+| Wireframe UI | `POST /api/workshops/:boardId/wireframe` | `populate_workshop_wireframe` |
 | Preview | `GET /api/workshops/:boardId/record` | `get_workshop_outcomes` |
 | Record to ticket | `POST /api/workshops/:boardId/record` | `record_workshop_outcomes` |
 
-Outcomes sync to the linked card: journal comments per sticky, markdown description block, tags `workshop:{id}` and `zone:{id}`.
+Outcomes sync to the linked card: journal comments per sticky, markdown description block, tags `workshop:{id}` and `zone:{id}`. **Action zones** (e.g. Actions, Must have, Top picks) optionally spawn **follow-up backlog cards**. Webhook: `workshop.completed` (opt-in on webhook registration).
 
 Card UI: open a card → **Workshops** section → start template. Canvas: **Record to card** when linked.
 
@@ -98,6 +102,7 @@ Card UI: open a card → **Workshops** section → start template. Canvas: **Rec
 | `card.in_progress` | Card enters In Progress |
 | `card.sla_warning` | Final 25% of SLA window (`CRANBANIA_SLA_WARNING_PERCENT`) |
 | `card.sla_breach` | SLA due passed (once per card) |
+| `workshop.completed` | Workshop outcomes recorded to linked card (register on webhook) |
 
 Env: `CRANBANIA_WEBHOOK_URLS` (comma-separated). Cron auth: `CRANBANIA_CRON_SECRET` for SLA check.
 

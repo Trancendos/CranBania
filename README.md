@@ -50,7 +50,8 @@ Incidents/changes get automatic SLA due dates. Journal records breaches.
 | `GET /api/governance/prince2` | Stage overview |
 | `GET/POST /api/visual-boards` | Visual boards (Lucid/Miro-style) |
 | `GET /api/workshops/templates` | Workshop template catalog |
-| `POST /api/workshops/start` | Start workshop from Kanban card |
+| `POST /api/workshops/run` | One-shot: start + populate + record |
+| `POST /api/workshops/:id/wireframe` | Add wireframe UI components |
 | `POST /api/workshops/:id/populate` | AI/human fills zone stickies |
 | `POST /api/workshops/:id/record` | Sync outcomes to linked card |
 | `GET/PATCH/DELETE /api/visual-boards/:id` | Board + canvas |

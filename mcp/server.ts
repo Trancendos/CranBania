@@ -40,8 +40,10 @@ import { VISUAL_BOARD_TYPES, VISUAL_NODE_KINDS } from "../lib/visual-types";
 import {
   extractWorkshopOutcomes,
   listWorkshopTemplates,
+  populateWorkshopWireframe,
   populateWorkshopZones,
   recordWorkshopOutcomes,
+  runWorkshopForCard,
   startWorkshopFromCard,
   suggestWorkshopsForCardId,
 } from "../lib/workshop";
@@ -52,7 +54,7 @@ const columnIdSchema = z.enum(COLUMN_IDS as [string, ...string[]]);
 
 const server = new McpServer({
   name: "cranbania",
-  version: "0.7.0",
+  version: "0.8.0",
 });
 
 server.tool(
@@ -673,7 +675,17 @@ server.tool(
   "list_workshop_templates",
   "List smart facilitation templates (SWOT, 5 Whys, brainstorming, retro, etc.)",
   {
-    category: z.enum(["brainstorm", "retro", "analysis", "planning"]).optional(),
+    category: z
+      .enum([
+        "brainstorm",
+        "retro",
+        "analysis",
+        "planning",
+        "roadmap",
+        "timeline",
+        "design",
+      ])
+      .optional(),
   },
   async ({ category }) => {
     const templates = listWorkshopTemplates(category ? { category } : undefined);
@@ -794,6 +806,8 @@ server.tool(
     updateDescription: z.boolean().optional(),
     appendTags: z.boolean().optional(),
     markComplete: z.boolean().optional(),
+    createFollowUpCards: z.boolean().optional(),
+    emitWebhook: z.boolean().optional(),
   },
   async (input) => {
     const result = await recordWorkshopOutcomes(input);
@@ -805,6 +819,97 @@ server.tool(
     }
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "run_workshop_for_card",
+  "One-shot workshop: suggest template (optional), start board, populate zones/wireframe, record to card",
+  {
+    cardId: z.string().uuid(),
+    templateId: z.enum(WORKSHOP_TEMPLATE_IDS as [string, ...string[]]).optional(),
+    title: z.string().min(1).optional(),
+    actor: z.string().optional(),
+    zones: z.record(z.string(), z.array(z.string())).optional(),
+    wireframeComponents: z
+      .array(
+        z.object({
+          kind: z.enum([
+            "wire_heading",
+            "wire_label",
+            "wire_button",
+            "wire_input",
+            "wire_checkbox",
+            "wire_nav",
+            "wire_image",
+            "wire_card",
+            "wire_divider",
+          ]),
+          text: z.string().optional(),
+        }),
+      )
+      .optional(),
+    record: z.boolean().optional(),
+    createFollowUpCards: z.boolean().optional(),
+  },
+  async (input) => {
+    const result = await runWorkshopForCard(input);
+    if (!result) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "populate_workshop_wireframe",
+  "Add wireframe UI components (buttons, inputs, nav) to a workshop screen zone",
+  {
+    boardId: z.string().uuid(),
+    zoneId: z.string().optional(),
+    replaceExisting: z.boolean().optional(),
+    actor: z.string().optional(),
+    components: z.array(
+      z.object({
+        kind: z.enum([
+          "wire_heading",
+          "wire_label",
+          "wire_button",
+          "wire_input",
+          "wire_checkbox",
+          "wire_nav",
+          "wire_image",
+          "wire_card",
+          "wire_divider",
+        ]),
+        text: z.string().optional(),
+        width: z.number().optional(),
+        height: z.number().optional(),
+      }),
+    ),
+  },
+  async ({ boardId, zoneId, components, actor, replaceExisting }) => {
+    const board = await populateWorkshopWireframe({
+      boardId,
+      zoneId,
+      components,
+      actor,
+      replaceExisting,
+    });
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
     };
   },
 );

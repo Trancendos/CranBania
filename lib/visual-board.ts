@@ -287,6 +287,23 @@ function defaultSizeForKind(kind: VisualNodeKind): { width: number; height: numb
       return { width: 120, height: 80 };
     case "ellipse":
       return { width: 120, height: 56 };
+    case "wire_heading":
+      return { width: 280, height: 36 };
+    case "wire_nav":
+      return { width: 320, height: 48 };
+    case "wire_image":
+      return { width: 200, height: 120 };
+    case "wire_card":
+      return { width: 260, height: 100 };
+    case "wire_divider":
+      return { width: 280, height: 4 };
+    case "wire_button":
+      return { width: 120, height: 36 };
+    case "wire_input":
+      return { width: 240, height: 36 };
+    case "wire_checkbox":
+    case "wire_label":
+      return { width: 160, height: 24 };
     default:
       return { width: 140, height: 56 };
   }
@@ -302,6 +319,14 @@ function labelForKind(kind: VisualNodeKind): string {
       return "Linked card";
     case "diamond":
       return "Decision";
+    case "wire_button":
+      return "Button";
+    case "wire_input":
+      return "Input";
+    case "wire_heading":
+      return "Heading";
+    case "wire_nav":
+      return "Navigation";
     default:
       return "Shape";
   }

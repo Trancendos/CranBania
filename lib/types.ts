@@ -134,7 +134,17 @@ export interface WorkspaceData {
 export type WebhookEvent =
   | "card.in_progress"
   | "card.sla_warning"
-  | "card.sla_breach";
+  | "card.sla_breach"
+  | "workshop.completed";
+
+export interface WebhookWorkshopDetail {
+  boardId: string;
+  templateId: string;
+  templateName: string;
+  zoneCount: number;
+  itemCount: number;
+  followUpCardIds?: string[];
+}
 
 export interface WebhookConfig {
   id: string;

@@ -4,8 +4,14 @@
  */
 
 import { randomUUID } from "crypto";
-import { addComment, getCard, updateCard } from "./board";
+import { addComment, createCard, getCard, updateCard } from "./board";
+import { emitCardEvent } from "./services/event-bus";
 import type { Card } from "./types";
+import { cardToWebhookPayload } from "./webhooks";
+import {
+  layoutWireframeComponents,
+  type WireframeComponentSpec,
+} from "./wireframe";
 import {
   createVisualBoard,
   getVisualBoard,
@@ -13,11 +19,12 @@ import {
   replaceVisualCanvas,
   updateVisualBoard,
 } from "./visual-board";
-import type { VisualBoard, VisualNode } from "./visual-types";
+import type { VisualBoard, VisualBoardType, VisualNode } from "./visual-types";
 import {
   buildWorkshopCanvas,
   getWorkshopTemplate,
   listWorkshopTemplates,
+  resolveActionZoneIds,
   type WorkshopCategory,
   type WorkshopTemplate,
 } from "./workshop-templates";
@@ -52,6 +59,36 @@ export interface RecordWorkshopOutcomesInput {
   updateDescription?: boolean;
   appendTags?: boolean;
   markComplete?: boolean;
+  createFollowUpCards?: boolean;
+  emitWebhook?: boolean;
+}
+
+export interface RunWorkshopForCardInput {
+  cardId: string;
+  templateId?: string;
+  title?: string;
+  actor?: string;
+  zones?: Record<string, string[]>;
+  wireframeComponents?: WireframeComponentSpec[];
+  wireframeZoneId?: string;
+  replacePlaceholders?: boolean;
+  record?: boolean;
+  createFollowUpCards?: boolean;
+  emitWebhook?: boolean;
+  updateDescription?: boolean;
+  appendTags?: boolean;
+}
+
+export interface RunWorkshopForCardResult {
+  board: VisualBoard;
+  templateId: string;
+  suggestion?: WorkshopSuggestion;
+  recorded?: {
+    board: VisualBoard;
+    card: Card | null;
+    summary: WorkshopOutcomeSummary;
+    followUpCardIds: string[];
+  } | null;
 }
 
 export interface WorkshopOutcomeSummary {
@@ -84,6 +121,12 @@ function scoreTemplate(template: WorkshopTemplate, card: Card): WorkshopSuggesti
   if (card.cardType === "incident" && template.category === "analysis") score += 10;
   if (card.cardType === "feature" && template.category === "brainstorm") score += 8;
   if (card.cardType === "change" && template.category === "planning") score += 8;
+  if (card.cardType === "feature" && template.category === "design") score += 12;
+  if (card.cardType === "feature" && template.category === "roadmap") score += 10;
+  if (/roadmap|timeline|wireframe|ui|ux|design/i.test(haystack)) {
+    if (template.category === "roadmap" || template.category === "timeline") score += 12;
+    if (template.category === "design") score += 12;
+  }
 
   if (score === 0) return null;
 
@@ -126,6 +169,13 @@ export async function suggestWorkshopsForCardId(
   return suggestWorkshopsForCard(card, limit);
 }
 
+function boardTypeForTemplate(template: WorkshopTemplate): VisualBoardType {
+  if (template.id === "ui-design-system") return "design_system";
+  if (template.category === "design" && template.layout.startsWith("wireframe")) return "wireframe";
+  if (template.category === "roadmap") return "roadmap";
+  return "whiteboard";
+}
+
 export async function startWorkshopFromCard(
   input: StartWorkshopInput,
 ): Promise<VisualBoard | null> {
@@ -143,7 +193,7 @@ export async function startWorkshopFromCard(
   const board = await createVisualBoard({
     title: input.title ?? `${template.name}: ${card.title}`,
     description: template.purpose,
-    boardType: "whiteboard",
+    boardType: boardTypeForTemplate(template),
     linkedCardId: card.id,
   });
 
@@ -261,6 +311,109 @@ export async function populateWorkshopZones(
   return getVisualBoard(board.id);
 }
 
+export async function populateWorkshopWireframe(input: {
+  boardId: string;
+  zoneId?: string;
+  components: WireframeComponentSpec[];
+  actor?: string;
+  replaceExisting?: boolean;
+}): Promise<VisualBoard | null> {
+  let board = await getVisualBoard(input.boardId);
+  if (!board?.workshopTemplateId || !board.workshop) return null;
+
+  const template = getWorkshopTemplate(board.workshopTemplateId);
+  if (!template) return null;
+
+  const zoneId = input.zoneId ?? template.wireframeZoneId ?? "screen";
+  const binding = board.workshop.zones.find((z) => z.id === zoneId);
+  if (!binding) return null;
+
+  let nodes = [...board.nodes];
+  if (input.replaceExisting) {
+    nodes = nodes.filter(
+      (n) => !(n.kind.startsWith("wire_") && zoneIdForNode(n, board!) === zoneId),
+    );
+  }
+
+  const frame = nodes.find((n) => n.id === binding.frameNodeId);
+  if (!frame) return null;
+
+  nodes.push(...layoutWireframeComponents(frame, input.components, zoneId));
+  board = (await replaceVisualCanvas(board.id, nodes, board.edges)) ?? board;
+
+  if (board.linkedCardId) {
+    await addComment(
+      board.linkedCardId,
+      `[Wireframe populated] ${input.components.length} components on ${zoneId}`,
+      input.actor ?? "agent",
+    );
+  }
+
+  return getVisualBoard(board.id);
+}
+
+async function createFollowUpCardsFromWorkshop(
+  parentCardId: string,
+  summary: WorkshopOutcomeSummary,
+  template: WorkshopTemplate,
+  actor: string,
+): Promise<string[]> {
+  const parent = await getCard(parentCardId);
+  if (!parent) return [];
+
+  const actionZones = resolveActionZoneIds(template);
+  const ids: string[] = [];
+
+  for (const zone of summary.zones) {
+    if (!actionZones.includes(zone.zoneId)) continue;
+    for (const item of zone.items) {
+      const child = await createCard({
+        title: item.slice(0, 120),
+        description: `Follow-up from **${summary.templateName}** (${zone.label}).\n\nParent card: ${parent.title} (${parentCardId})`,
+        columnId: "backlog",
+        cardType: parent.cardType === "incident" ? "task" : parent.cardType,
+        tags: [
+          `workshop-follow-up:${summary.templateId}`,
+          `parent:${parentCardId}`,
+          `zone:${zone.zoneId}`,
+        ],
+        epicId: parent.epicId,
+        sprintId: parent.sprintId,
+      });
+      await addComment(
+        parentCardId,
+        `[Workshop follow-up created] ${child.title} (${child.id})`,
+        actor,
+      );
+      ids.push(child.id);
+    }
+  }
+
+  return ids;
+}
+
+async function emitWorkshopCompletedWebhook(
+  card: Card,
+  board: VisualBoard,
+  summary: WorkshopOutcomeSummary,
+  followUpCardIds: string[],
+): Promise<void> {
+  const itemCount = summary.zones.reduce((n, z) => n + z.items.length, 0);
+  await emitCardEvent({
+    event: "workshop.completed",
+    at: new Date().toISOString(),
+    card: cardToWebhookPayload(card),
+    workshop: {
+      boardId: board.id,
+      templateId: summary.templateId,
+      templateName: summary.templateName,
+      zoneCount: summary.zones.filter((z) => z.items.length > 0).length,
+      itemCount,
+      followUpCardIds: followUpCardIds.length ? followUpCardIds : undefined,
+    },
+  });
+}
+
 export function extractWorkshopOutcomes(board: VisualBoard): WorkshopOutcomeSummary | null {
   if (!board.workshopTemplateId || !board.workshop) return null;
   const template = getWorkshopTemplate(board.workshopTemplateId);
@@ -301,15 +454,22 @@ function buildDescriptionAppend(summary: WorkshopOutcomeSummary): string {
 
 export async function recordWorkshopOutcomes(
   input: RecordWorkshopOutcomesInput,
-): Promise<{ board: VisualBoard; card: Card | null; summary: WorkshopOutcomeSummary } | null> {
+): Promise<{
+  board: VisualBoard;
+  card: Card | null;
+  summary: WorkshopOutcomeSummary;
+  followUpCardIds: string[];
+} | null> {
   const board = await getVisualBoard(input.boardId);
   if (!board) return null;
 
   const summary = extractWorkshopOutcomes(board);
   if (!summary) return null;
 
+  const template = getWorkshopTemplate(summary.templateId);
   const cardId = input.cardId ?? board.linkedCardId;
   let card: Card | null = null;
+  let followUpCardIds: string[] = [];
 
   if (cardId) {
     card = await getCard(cardId);
@@ -346,10 +506,19 @@ export async function recordWorkshopOutcomes(
           actor: input.actor ?? "agent",
         });
       }
+
+      if (input.createFollowUpCards !== false && template) {
+        followUpCardIds = await createFollowUpCardsFromWorkshop(
+          cardId,
+          summary,
+          template,
+          input.actor ?? "agent",
+        );
+      }
     }
   }
 
-  const updatedBoard = await updateVisualBoard(board.id, {
+  await updateVisualBoard(board.id, {
     workshop: {
       ...board.workshop!,
       status: input.markComplete !== false ? "completed" : board.workshop!.status,
@@ -365,11 +534,78 @@ export async function recordWorkshopOutcomes(
     );
   }
 
-  const finalBoard = (await getVisualBoard(board.id)) ?? updatedBoard;
+  const finalBoard = (await getVisualBoard(board.id))!;
+  const finalCard = cardId ? await getCard(cardId) : card;
+
+  if (input.emitWebhook !== false && finalCard) {
+    await emitWorkshopCompletedWebhook(finalCard, finalBoard, summary, followUpCardIds);
+  }
+
   return {
-    board: finalBoard!,
-    card,
+    board: finalBoard,
+    card: finalCard,
     summary,
+    followUpCardIds,
+  };
+}
+
+export async function runWorkshopForCard(
+  input: RunWorkshopForCardInput,
+): Promise<RunWorkshopForCardResult | null> {
+  const card = await getCard(input.cardId);
+  if (!card) return null;
+
+  const suggestions = suggestWorkshopsForCard(card, 5);
+  const templateId =
+    input.templateId ?? suggestions[0]?.templateId ?? listWorkshopTemplates()[0]?.id;
+  if (!templateId) return null;
+
+  const board = await startWorkshopFromCard({
+    cardId: input.cardId,
+    templateId,
+    title: input.title,
+    actor: input.actor,
+  });
+  if (!board) return null;
+
+  if (input.zones && Object.keys(input.zones).length > 0) {
+    await populateWorkshopZones({
+      boardId: board.id,
+      zones: input.zones,
+      actor: input.actor,
+      replacePlaceholders: input.replacePlaceholders ?? true,
+    });
+  }
+
+  if (input.wireframeComponents?.length) {
+    await populateWorkshopWireframe({
+      boardId: board.id,
+      zoneId: input.wireframeZoneId,
+      components: input.wireframeComponents,
+      actor: input.actor,
+      replaceExisting: true,
+    });
+  }
+
+  let recorded = null;
+  if (input.record !== false) {
+    recorded = await recordWorkshopOutcomes({
+      boardId: board.id,
+      cardId: input.cardId,
+      actor: input.actor,
+      updateDescription: input.updateDescription,
+      appendTags: input.appendTags,
+      createFollowUpCards: input.createFollowUpCards,
+      emitWebhook: input.emitWebhook,
+    });
+  }
+
+  const finalBoard = (await getVisualBoard(board.id)) ?? board;
+  return {
+    board: finalBoard,
+    templateId,
+    suggestion: suggestions.find((s) => s.templateId === templateId),
+    recorded,
   };
 }
 
