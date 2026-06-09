@@ -1,0 +1,16 @@
+{
+  "webhooks": [
+    {
+      "id": "example-replace-with-uuid-on-register",
+      "url": "http://127.0.0.1:9999/cranbania",
+      "enabled": true,
+      "events": [
+        "card.in_progress",
+        "card.sla_warning",
+        "card.sla_breach",
+        "workshop.completed"
+      ],
+      "secret": "optional-shared-secret"
+    }
+  ]
+}

@@ -73,6 +73,15 @@ export interface VisualEdge {
   style?: VisualEdgeStyle;
 }
 
+/** Lightweight cursor presence (poll-based, no WebSocket SaaS). */
+export interface VisualPresence {
+  sessionId: string;
+  label: string;
+  x: number;
+  y: number;
+  updatedAt: string;
+}
+
 export interface VisualBoard {
   id: string;
   title: string;
@@ -86,6 +95,8 @@ export interface VisualBoard {
   /** Smart facilitation template (SWOT, 5 Whys, etc.) */
   workshopTemplateId?: string;
   workshop?: WorkshopMeta;
+  /** Ephemeral collaborators — expires after ~30s without heartbeat */
+  presence?: VisualPresence[];
   createdAt: string;
   updatedAt: string;
 }

@@ -11,6 +11,7 @@ import {
   type VisualNode,
   type VisualNodeKind,
   type VisualViewport,
+  type VisualPresence,
   type WorkshopMeta,
 } from "./visual-types";
 import {
@@ -221,6 +222,38 @@ export async function updateVisualBoard(
         ? undefined
         : (input.workshopTemplateId ?? board.workshopTemplateId),
     workshop: input.workshop === null ? undefined : (input.workshop ?? board.workshop),
+    updatedAt: new Date().toISOString(),
+  };
+  await writeVisualBoards(boards);
+  return boards[index];
+}
+
+const PRESENCE_TTL_MS = 30_000;
+const PRESENCE_MAX = 12;
+
+export async function updateVisualPresence(
+  boardId: string,
+  input: Pick<VisualPresence, "sessionId" | "label" | "x" | "y">,
+): Promise<VisualBoard | null> {
+  const boards = await readVisualBoards();
+  const index = boards.findIndex((b) => b.id === boardId);
+  if (index === -1) return null;
+  const board = boards[index];
+  const now = Date.now();
+  const cutoff = now - PRESENCE_TTL_MS;
+  const fresh = (board.presence ?? []).filter(
+    (p) => p.sessionId !== input.sessionId && new Date(p.updatedAt).getTime() > cutoff,
+  );
+  fresh.push({
+    sessionId: input.sessionId,
+    label: input.label,
+    x: input.x,
+    y: input.y,
+    updatedAt: new Date().toISOString(),
+  });
+  boards[index] = {
+    ...board,
+    presence: fresh.slice(-PRESENCE_MAX),
     updatedAt: new Date().toISOString(),
   };
   await writeVisualBoards(boards);

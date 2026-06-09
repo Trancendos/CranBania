@@ -28,6 +28,7 @@ import {
   type WorkshopCategory,
   type WorkshopTemplate,
 } from "./workshop-templates";
+import { heuristicZonesFromCard } from "./workshop-heuristic";
 
 export interface WorkshopSuggestion {
   templateId: string;
@@ -77,6 +78,8 @@ export interface RunWorkshopForCardInput {
   emitWebhook?: boolean;
   updateDescription?: boolean;
   appendTags?: boolean;
+  /** When true and zones omitted, fill from card title/description (no LLM). Default true. */
+  useHeuristicPopulate?: boolean;
 }
 
 export interface RunWorkshopForCardResult {
@@ -568,10 +571,21 @@ export async function runWorkshopForCard(
   });
   if (!board) return null;
 
-  if (input.zones && Object.keys(input.zones).length > 0) {
+  const template = getWorkshopTemplate(templateId);
+  let zonesToApply = input.zones;
+
+  if (
+    (!zonesToApply || Object.keys(zonesToApply).length === 0) &&
+    input.useHeuristicPopulate !== false &&
+    template
+  ) {
+    zonesToApply = heuristicZonesFromCard(card, template);
+  }
+
+  if (zonesToApply && Object.keys(zonesToApply).length > 0) {
     await populateWorkshopZones({
       boardId: board.id,
-      zones: input.zones,
+      zones: zonesToApply,
       actor: input.actor,
       replacePlaceholders: input.replacePlaceholders ?? true,
     });

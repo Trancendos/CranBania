@@ -1,8 +1,9 @@
 # AGENTS.md
 
-## CranBania v0.8.0 — Workshops, roadmaps, wireframes
+## CranBania v0.9.0 — Magna Carta alignment + shipment
 
-**Mandate:** no Jira, ServiceNow, or paid SaaS. **Not Convex** — see `docs/architecture.md`.
+**Mandate:** no Jira, ServiceNow, or paid SaaS. **Not Convex** — see `docs/architecture.md`.  
+**Governance cross-ref:** [docs/magna-carta-alignment.md](./docs/magna-carta-alignment.md) ↔ [Trancendos/Magna-Carta](https://github.com/Trancendos/Magna-Carta).
 
 **CI mandate:** do **not** add `.github/workflows/` or GitHub Actions. Use **Forgejo Actions** (`.forgejo/workflows/`) and/or **Woodpecker** (`.woodpecker/`) on your self-hosted forge — zero github.com Actions minutes.
 
@@ -70,16 +71,18 @@ Lucidchart / Miro-style canvas — **zero SaaS**, JSON file storage.
 | `PATCH/DELETE .../nodes/:nodeId` | Move/edit/delete node |
 | `POST .../edges` | Connect nodes |
 | `PATCH /api/visual-boards/:id` + `{ nodes, edges }` | Full canvas replace |
+| `PATCH /api/visual-boards/:id/presence` | Poll-based cursors (zero SaaS) |
+| `GET /api/visual-boards/:id/export` | Portable canvas JSON |
+| `POST /api/visual-boards/:id/import` | Import canvas (merge/replace) |
+| `POST /api/webhooks` | Register incl. `workshop.completed` |
 
-Board types: `whiteboard`, `flowchart`, `mindmap`, `retro`, `architecture`.
+Board types: `whiteboard`, `flowchart`, `mindmap`, `retro`, `architecture`, `wireframe`, `roadmap`, `design_system`.
 
-MCP: `list_visual_boards`, `get_visual_board`, `create_visual_board`, `update_visual_board`, `delete_visual_board`, `add_visual_node`, `update_visual_node`, `delete_visual_node`, `add_visual_edge`, `delete_visual_edge`, `replace_visual_canvas`.
+MCP: `list_visual_boards`, `create_visual_board`, `replace_visual_canvas`, `register_webhook`, `export_visual_board`, …
 
-## Workshop templates (v0.7.0)
+## Workshop templates (v0.7.0–0.9.0)
 
-17 facilitation templates (SWOT, 5 Whys, Good/Bad/Ugly, ideastorm, fishbone, lean canvas, …) — AI can run a full cycle from a Kanban card.
-
-**Also:** product/quarterly **roadmaps**, **release timelines**, **MoSCoW**, **OKRs**, **mobile/desktop wireframes**, **UI design system**, component library (27 templates total).
+**27** facilitation templates (SWOT, 5 Whys, roadmaps, wireframes, OKRs, …) — AI or **heuristic populate** (no LLM keys) from card text.
 
 | Step | REST | MCP |
 |------|------|-----|
@@ -104,7 +107,7 @@ Card UI: open a card → **Workshops** section → start template. Canvas: **Rec
 | `card.sla_breach` | SLA due passed (once per card) |
 | `workshop.completed` | Workshop outcomes recorded to linked card (register on webhook) |
 
-Env: `CRANBANIA_WEBHOOK_URLS` (comma-separated). Cron auth: `CRANBANIA_CRON_SECRET` for SLA check.
+Env: `CRANBANIA_WEBHOOK_URLS` (comma-separated). Bootstrap all events: `npm run webhooks:bootstrap` (set `CRANBANIA_WEBHOOK_URL`). Cron auth: `CRANBANIA_CRON_SECRET` for SLA check.
 
 Automation recipes: `docs/automation-recipes.md` (Forgejo, Woodpecker, n8n, systemd).
 

@@ -58,15 +58,22 @@ Paid tools may be used optionally by teams, but **CranBania will not depend on t
 - Event bus + JSON migrations + automation status API
 - MCP: `get_automation_status`, `run_sla_check`
 
-### Track 7 — Visual collaboration (v0.6.0–0.7.0)
+### Track 7 — Visual collaboration (v0.6.0–0.9.0)
 
-- Lucidchart / Miro-style boards — shapes, stickies, frames, connectors
-- Templates: flowchart, mindmap, retro, architecture, whiteboard
-- **17 smart workshop templates** (SWOT, 5 Whys, ideastorm, premortem, lean canvas, …)
+- Lucidchart / Miro-style boards — shapes, stickies, frames, connectors, wireframes
+- **27 smart workshop templates** (SWOT, 5 Whys, roadmaps, timelines, MoSCoW, OKRs, wireframes, design system, …)
 - **Card-linked workshop lifecycle:** suggest → start → populate → record outcomes to ticket
-- REST + MCP for AI agents
+- **One-shot** `run_workshop_for_card` + rule-based heuristic populate (no LLM API keys)
+- Canvas **import/export** JSON + poll-based **presence** cursors (zero SaaS)
+- REST + MCP for AI agents; `workshop.completed` webhook (opt-in)
 - Included in workspace export v3 (`visualBoards`)
-- **Not building:** real-time multiplayer cursors, paid diagram SaaS sync
+- **Not building:** paid diagram SaaS sync, full CRDT multiplayer, embedded cloud LLM
+
+### Track 8 — Magna Carta alignment (v0.9.0)
+
+- [docs/magna-carta-alignment.md](./docs/magna-carta-alignment.md) — zero-cost sovereignty, change/incident/backup mapping
+- Webhook bootstrap (`npm run webhooks:bootstrap`) for `workshop.completed` automation evidence
+- Cross-reference [Trancendos/Magna-Carta](https://github.com/Trancendos/Magna-Carta) (documentation programme — not runtime Tranc3 gate)
 
 See `docs/architecture.md` and `docs/automation-recipes.md`.
 

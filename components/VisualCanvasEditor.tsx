@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { VisualBoard, VisualEdge, VisualNode, VisualNodeKind } from "@/lib/visual-types";
+import type { VisualBoard, VisualEdge, VisualNode, VisualNodeKind, VisualPresence } from "@/lib/visual-types";
 
 function nodeCenter(n: VisualNode) {
   return { x: n.x + n.width / 2, y: n.y + n.height / 2 };
@@ -146,6 +146,48 @@ export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
   const [zoom, setZoom] = useState(1);
   const dragRef = useRef<{ nodeId: string; ox: number; oy: number } | null>(null);
   const panRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+  const sessionRef = useRef<string>(
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `session-${Date.now()}`,
+  );
+  const [remotePresence, setRemotePresence] = useState<VisualPresence[]>([]);
+  const presenceThrottle = useRef(0);
+
+  const sendPresence = useCallback(
+    async (clientX: number, clientY: number) => {
+      const now = Date.now();
+      if (now - presenceThrottle.current < 400) return;
+      presenceThrottle.current = now;
+      const x = Math.round((clientX - pan.x) / zoom);
+      const y = Math.round((clientY - pan.y) / zoom);
+      await fetch(`/api/visual-boards/${boardId}/presence`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: sessionRef.current,
+          label: "You",
+          x,
+          y,
+        }),
+      });
+    },
+    [boardId, pan.x, pan.y, zoom],
+  );
+
+  useEffect(() => {
+    const tick = async () => {
+      const res = await fetch(`/api/visual-boards/${boardId}/presence`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { presence: VisualPresence[] };
+      setRemotePresence(
+        data.presence.filter((p) => p.sessionId !== sessionRef.current),
+      );
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 2500);
+    return () => window.clearInterval(id);
+  }, [boardId]);
 
   const reload = useCallback(async () => {
     const res = await fetch(`/api/visual-boards/${boardId}`);
@@ -320,6 +362,7 @@ export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
           }
         }}
         onMouseMove={(e) => {
+          void sendPresence(e.clientX, e.clientY);
           if (dragRef.current && board) {
             const d = dragRef.current;
             const node = board.nodes.find((n) => n.id === d.nodeId);
@@ -389,6 +432,14 @@ export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
                 </g>
               );
             })}
+            {remotePresence.map((p) => (
+              <g key={p.sessionId} transform={`translate(${p.x},${p.y})`}>
+                <circle r={6} fill="#22d3ee" opacity={0.85} />
+                <text x={10} y={4} fill="#22d3ee" fontSize={11}>
+                  {p.label}
+                </text>
+              </g>
+            ))}
             <defs>
               <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
                 <path d="M0,0 L6,3 L0,6 Z" fill="var(--muted)" />

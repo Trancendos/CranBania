@@ -20,6 +20,8 @@ import {
   updateCard,
 } from "../lib/board";
 import { exportWorkspace } from "../lib/export";
+import { registerWebhook, ALL_WEBHOOK_EVENTS } from "../lib/webhook-register";
+import { exportVisualBoardSnapshot } from "../lib/visual-canvas-io";
 import { buildAutomationStatus } from "../lib/automation/status";
 import { runSlaChecks } from "../lib/sla-monitor";
 import { createEpic, createSprint } from "../lib/workspace";
@@ -54,7 +56,7 @@ const columnIdSchema = z.enum(COLUMN_IDS as [string, ...string[]]);
 
 const server = new McpServer({
   name: "cranbania",
-  version: "0.8.0",
+  version: "0.9.0",
 });
 
 server.tool(
@@ -852,6 +854,7 @@ server.tool(
       .optional(),
     record: z.boolean().optional(),
     createFollowUpCards: z.boolean().optional(),
+    useHeuristicPopulate: z.boolean().optional(),
   },
   async (input) => {
     const result = await runWorkshopForCard(input);
@@ -910,6 +913,60 @@ server.tool(
     }
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "register_webhook",
+  "Register outbound webhook (includes workshop.completed when events omitted)",
+  {
+    url: z.string().url(),
+    enabled: z.boolean().optional(),
+    secret: z.string().optional(),
+    events: z
+      .array(
+        z.enum([
+          "card.in_progress",
+          "card.sla_warning",
+          "card.sla_breach",
+          "workshop.completed",
+        ]),
+      )
+      .optional(),
+  },
+  async ({ url, enabled, secret, events }) => {
+    const webhook = await registerWebhook({
+      url,
+      enabled,
+      secret,
+      events: events ?? ALL_WEBHOOK_EVENTS,
+    });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ webhook }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "export_visual_board",
+  "Export a visual board as portable CranBania JSON (zero-cost Lucid/Miro alternative)",
+  { boardId: z.string().uuid() },
+  async ({ boardId }) => {
+    const board = await getVisualBoard(boardId);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(exportVisualBoardSnapshot(board), null, 2),
+        },
+      ],
     };
   },
 );

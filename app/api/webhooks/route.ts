@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readWebhooks, writeWebhooks } from "@/lib/webhooks";
+import { readWebhooks } from "@/lib/webhooks";
+import { registerWebhook } from "@/lib/webhook-register";
 import { webhookRegisterSchema } from "@/lib/schemas/card";
 import type { WebhookEvent } from "@/lib/types";
-import { randomUUID } from "crypto";
 
 export async function GET() {
   const webhooks = await readWebhooks();
@@ -19,14 +19,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const fileWebhooks = (await readWebhooks()).filter((w) => !w.id.startsWith("env-"));
-  const webhook = {
-    id: randomUUID(),
+  const webhook = await registerWebhook({
     url: parsed.data.url,
     enabled: parsed.data.enabled ?? true,
-    events: parsed.data.events as WebhookEvent[],
     secret: parsed.data.secret,
-  };
-  await writeWebhooks([...fileWebhooks, webhook]);
+    events: parsed.data.events as WebhookEvent[],
+  });
   return NextResponse.json({ webhook }, { status: 201 });
 }
