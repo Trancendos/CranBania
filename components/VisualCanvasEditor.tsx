@@ -63,6 +63,7 @@ export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
   const [board, setBoard] = useState<VisualBoard | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const dragRef = useRef<{ nodeId: string; ox: number; oy: number } | null>(null);
@@ -143,6 +144,18 @@ export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
     setSelectedId(node.id);
   }
 
+  async function recordToCard() {
+    if (!board?.linkedCardId || !board.workshopTemplateId) return;
+    setRecording(true);
+    await fetch(`/api/workshops/${boardId}/record`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actor: "human" }),
+    });
+    setRecording(false);
+    await reload();
+  }
+
   if (!board) {
     return <div className="p-20 text-center text-[var(--muted)]">Loading canvas…</div>;
   }
@@ -156,7 +169,17 @@ export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
           ← Boards
         </Link>
         <h1 className="text-lg font-medium">{board.title}</h1>
-        <span className="text-xs text-[var(--muted)]">{board.boardType}</span>
+        {board.workshopTemplateId ? (
+          <span className="rounded bg-purple-900/50 px-2 py-0.5 text-[10px] uppercase text-purple-200">
+            {board.workshopTemplateId}
+            {board.workshop?.status === "completed" ? " · recorded" : ""}
+          </span>
+        ) : (
+          <span className="text-xs text-[var(--muted)]">{board.boardType}</span>
+        )}
+        {board.linkedCardId ? (
+          <span className="text-xs text-emerald-400">↗ card linked</span>
+        ) : null}
         <div className="ml-auto flex flex-wrap gap-1">
           {(
             [
@@ -190,6 +213,16 @@ export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
           >
             Save view
           </button>
+          {board.workshopTemplateId && board.linkedCardId ? (
+            <button
+              type="button"
+              disabled={recording}
+              onClick={() => void recordToCard()}
+              className="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-300 disabled:opacity-50"
+            >
+              {recording ? "Recording…" : "Record to card"}
+            </button>
+          ) : null}
         </div>
       </header>
 

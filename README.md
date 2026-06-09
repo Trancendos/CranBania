@@ -13,6 +13,7 @@ See [STRATEGY.md](./STRATEGY.md) for the £0 mandate and roadmap.
 | ServiceNow changes | `cardType: change` + SLA (default 72h) |
 | Prince2 tooling | `prince2Stage` on each card |
 | Lucidchart / Miro | `/visual` boards + `/api/visual-boards` + MCP |
+| Miro workshop kits | **17 workshop templates** — SWOT, 5 Whys, ideastorm, … |
 | Paid backups | `GET /api/export` JSON |
 
 ## Columns
@@ -48,6 +49,10 @@ Incidents/changes get automatic SLA due dates. Journal records breaches.
 | `GET /api/itsm/sla` | SLA report |
 | `GET /api/governance/prince2` | Stage overview |
 | `GET/POST /api/visual-boards` | Visual boards (Lucid/Miro-style) |
+| `GET /api/workshops/templates` | Workshop template catalog |
+| `POST /api/workshops/start` | Start workshop from Kanban card |
+| `POST /api/workshops/:id/populate` | AI/human fills zone stickies |
+| `POST /api/workshops/:id/record` | Sync outcomes to linked card |
 | `GET/PATCH/DELETE /api/visual-boards/:id` | Board + canvas |
 | `GET /visual` | Visual board UI |
 | `GET /api/export` | Full backup |

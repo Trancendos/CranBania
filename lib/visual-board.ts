@@ -11,6 +11,7 @@ import {
   type VisualNode,
   type VisualNodeKind,
   type VisualViewport,
+  type WorkshopMeta,
 } from "./visual-types";
 import {
   migrateVisualBoards,
@@ -196,6 +197,8 @@ export interface UpdateVisualBoardInput {
   viewport?: VisualViewport;
   linkedCardId?: string | null;
   linkedEpicId?: string | null;
+  workshopTemplateId?: string | null;
+  workshop?: WorkshopMeta | null;
 }
 
 export async function updateVisualBoard(
@@ -213,6 +216,11 @@ export async function updateVisualBoard(
       input.linkedCardId === null ? undefined : (input.linkedCardId ?? board.linkedCardId),
     linkedEpicId:
       input.linkedEpicId === null ? undefined : (input.linkedEpicId ?? board.linkedEpicId),
+    workshopTemplateId:
+      input.workshopTemplateId === null
+        ? undefined
+        : (input.workshopTemplateId ?? board.workshopTemplateId),
+    workshop: input.workshop === null ? undefined : (input.workshop ?? board.workshop),
     updatedAt: new Date().toISOString(),
   };
   await writeVisualBoards(boards);

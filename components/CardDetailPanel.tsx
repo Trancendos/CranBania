@@ -1,8 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { Card, CodeChange, JournalEntry } from "@/lib/types";
 import { computeSlaStatus, formatSlaRemaining } from "@/lib/sla";
+
+interface WorkshopSuggestion {
+  templateId: string;
+  name: string;
+  category: string;
+  reason: string;
+}
+
+interface LinkedWorkshop {
+  id: string;
+  title: string;
+  workshopTemplateId?: string;
+}
 
 function JournalIcon({ type }: { type: JournalEntry["type"] }) {
   const colors: Record<JournalEntry["type"], string> = {
@@ -61,6 +75,37 @@ export default function CardDetailPanel({
 }) {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [workshopSuggestions, setWorkshopSuggestions] = useState<WorkshopSuggestion[]>([]);
+  const [linkedWorkshops, setLinkedWorkshops] = useState<LinkedWorkshop[]>([]);
+  const [startingWorkshop, setStartingWorkshop] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(`/api/workshops/card/${card.id}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        suggestions: WorkshopSuggestion[];
+        workshops: LinkedWorkshop[];
+      };
+      setWorkshopSuggestions(data.suggestions ?? []);
+      setLinkedWorkshops(data.workshops ?? []);
+    })();
+  }, [card.id]);
+
+  async function startWorkshop(templateId: string) {
+    setStartingWorkshop(templateId);
+    const res = await fetch("/api/workshops/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardId: card.id, templateId, actor: "human" }),
+    });
+    setStartingWorkshop(null);
+    if (res.ok) {
+      const data = (await res.json()) as { board: { id: string } };
+      window.open(`/visual/${data.board.id}`, "_blank");
+      await onUpdated();
+    }
+  }
 
   async function submitComment(e: React.FormEvent) {
     e.preventDefault();
@@ -123,6 +168,45 @@ export default function CardDetailPanel({
             <p className="text-sm">{card.description}</p>
           </section>
         ) : null}
+
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase text-[var(--muted)]">
+            Workshops
+          </h3>
+          <p className="mb-2 text-xs text-[var(--muted)]">
+            Smart templates (SWOT, 5 Whys, retro…) — agents populate and record outcomes to this
+            card.
+          </p>
+          {linkedWorkshops.length > 0 ? (
+            <ul className="mb-3 space-y-1 text-xs">
+              {linkedWorkshops.map((w) => (
+                <li key={w.id}>
+                  <Link href={`/visual/${w.id}`} className="text-[var(--accent)] hover:underline">
+                    {w.title}
+                  </Link>
+                  {w.workshopTemplateId ? (
+                    <span className="ml-2 text-[var(--muted)]">{w.workshopTemplateId}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="flex flex-col gap-1">
+            {workshopSuggestions.slice(0, 4).map((s) => (
+              <button
+                key={s.templateId}
+                type="button"
+                disabled={startingWorkshop !== null}
+                onClick={() => void startWorkshop(s.templateId)}
+                className="rounded border border-[var(--border)] px-2 py-1.5 text-left text-xs hover:bg-[var(--surface-hover)] disabled:opacity-50"
+              >
+                <span className="font-medium">{s.name}</span>
+                <span className="ml-2 text-[var(--muted)]">{s.category}</span>
+                <span className="block text-[10px] text-[var(--muted)]">{s.reason}</span>
+              </button>
+            ))}
+          </div>
+        </section>
 
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase text-[var(--muted)]">

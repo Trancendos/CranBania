@@ -58,11 +58,13 @@ Paid tools may be used optionally by teams, but **CranBania will not depend on t
 - Event bus + JSON migrations + automation status API
 - MCP: `get_automation_status`, `run_sla_check`
 
-### Track 7 — Visual collaboration (v0.6.0)
+### Track 7 — Visual collaboration (v0.6.0–0.7.0)
 
 - Lucidchart / Miro-style boards — shapes, stickies, frames, connectors
 - Templates: flowchart, mindmap, retro, architecture, whiteboard
-- REST + MCP for AI agents (`replace_visual_canvas` for batch diagram updates)
+- **17 smart workshop templates** (SWOT, 5 Whys, ideastorm, premortem, lean canvas, …)
+- **Card-linked workshop lifecycle:** suggest → start → populate → record outcomes to ticket
+- REST + MCP for AI agents
 - Included in workspace export v3 (`visualBoards`)
 - **Not building:** real-time multiplayer cursors, paid diagram SaaS sync
 

@@ -58,8 +58,26 @@ export interface VisualBoard {
   viewport: VisualViewport;
   linkedCardId?: string;
   linkedEpicId?: string;
+  /** Smart facilitation template (SWOT, 5 Whys, etc.) */
+  workshopTemplateId?: string;
+  workshop?: WorkshopMeta;
   createdAt: string;
   updatedAt: string;
+}
+
+export type WorkshopStatus = "draft" | "in_progress" | "completed";
+
+export interface WorkshopZoneBinding {
+  id: string;
+  label: string;
+  frameNodeId: string;
+}
+
+export interface WorkshopMeta {
+  status: WorkshopStatus;
+  zones: WorkshopZoneBinding[];
+  anchorNodeId?: string;
+  recordedAt?: string;
 }
 
 export interface VisualBoardsFile {

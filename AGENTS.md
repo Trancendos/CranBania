@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## CranBania v0.6.0 — Visual boards + Forgejo agents + API auth
+## CranBania v0.7.0 — Workshop templates + visual boards
 
 **Mandate:** no Jira, ServiceNow, or paid SaaS. **Not Convex** — see `docs/architecture.md`.
 
@@ -56,6 +56,7 @@ Details: `docs/automation-recipes.md`
 5. `get_sla_report` or `POST /api/itsm/sla/check` for breach/warning webhooks
 6. `export_workspace` for backup
 7. **Visual boards:** `create_visual_board`, `add_visual_node`, `add_visual_edge`, `replace_visual_canvas` — Lucid/Miro-style diagrams at `/visual`
+8. **Workshops from cards:** `suggest_workshop_for_card` → `start_workshop_from_card` → `populate_workshop_zones` → `record_workshop_outcomes`
 
 ## Visual boards (v0.6.0)
 
@@ -73,6 +74,22 @@ Lucidchart / Miro-style canvas — **zero SaaS**, JSON file storage.
 Board types: `whiteboard`, `flowchart`, `mindmap`, `retro`, `architecture`.
 
 MCP: `list_visual_boards`, `get_visual_board`, `create_visual_board`, `update_visual_board`, `delete_visual_board`, `add_visual_node`, `update_visual_node`, `delete_visual_node`, `add_visual_edge`, `delete_visual_edge`, `replace_visual_canvas`.
+
+## Workshop templates (v0.7.0)
+
+17 facilitation templates (SWOT, 5 Whys, Good/Bad/Ugly, ideastorm, fishbone, lean canvas, …) — AI can run a full cycle from a Kanban card.
+
+| Step | REST | MCP |
+|------|------|-----|
+| Suggest | `POST /api/workshops/suggest` | `suggest_workshop_for_card` |
+| Start | `POST /api/workshops/start` | `start_workshop_from_card` |
+| Populate zones | `POST /api/workshops/:boardId/populate` | `populate_workshop_zones` |
+| Preview | `GET /api/workshops/:boardId/record` | `get_workshop_outcomes` |
+| Record to ticket | `POST /api/workshops/:boardId/record` | `record_workshop_outcomes` |
+
+Outcomes sync to the linked card: journal comments per sticky, markdown description block, tags `workshop:{id}` and `zone:{id}`.
+
+Card UI: open a card → **Workshops** section → start template. Canvas: **Record to card** when linked.
 
 ## Webhooks
 

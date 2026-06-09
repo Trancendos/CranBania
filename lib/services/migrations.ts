@@ -8,7 +8,7 @@ import { defaultViewport, type VisualBoard, type VisualBoardsFile } from "../vis
 
 export const BOARD_DATA_VERSION = 3;
 export const WORKSPACE_DATA_VERSION = 2;
-export const VISUAL_BOARD_DATA_VERSION = 1;
+export const VISUAL_BOARD_DATA_VERSION = 2;
 
 export interface StoredBoard extends Board {
   version?: number;
@@ -71,6 +71,8 @@ function migrateVisualBoard(board: Partial<VisualBoard>): VisualBoard {
     viewport: board.viewport ?? defaultViewport(),
     linkedCardId: board.linkedCardId,
     linkedEpicId: board.linkedEpicId,
+    workshopTemplateId: board.workshopTemplateId,
+    workshop: board.workshop,
     createdAt,
     updatedAt: board.updatedAt ?? createdAt,
   };

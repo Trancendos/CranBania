@@ -37,13 +37,22 @@ import {
   updateVisualNode,
 } from "../lib/visual-board";
 import { VISUAL_BOARD_TYPES, VISUAL_NODE_KINDS } from "../lib/visual-types";
+import {
+  extractWorkshopOutcomes,
+  listWorkshopTemplates,
+  populateWorkshopZones,
+  recordWorkshopOutcomes,
+  startWorkshopFromCard,
+  suggestWorkshopsForCardId,
+} from "../lib/workshop";
+import { WORKSHOP_TEMPLATE_IDS } from "../lib/workshop-templates";
 import { CARD_TYPES, COLUMN_IDS, type CardType, type ColumnId } from "../lib/types";
 
 const columnIdSchema = z.enum(COLUMN_IDS as [string, ...string[]]);
 
 const server = new McpServer({
   name: "cranbania",
-  version: "0.6.0",
+  version: "0.7.0",
 });
 
 server.tool(
@@ -656,6 +665,146 @@ server.tool(
     }
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "list_workshop_templates",
+  "List smart facilitation templates (SWOT, 5 Whys, brainstorming, retro, etc.)",
+  {
+    category: z.enum(["brainstorm", "retro", "analysis", "planning"]).optional(),
+  },
+  async ({ category }) => {
+    const templates = listWorkshopTemplates(category ? { category } : undefined);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ templates }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "suggest_workshop_for_card",
+  "Recommend workshop templates for a Kanban card based on type and keywords",
+  {
+    cardId: z.string().uuid(),
+    limit: z.number().int().min(1).max(20).optional(),
+  },
+  async ({ cardId, limit }) => {
+    const suggestions = await suggestWorkshopsForCardId(cardId, limit ?? 5);
+    if (!suggestions) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ suggestions }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "start_workshop_from_card",
+  "Create a linked visual workshop board from a Kanban card (SWOT, 5 Whys, ideastorm, etc.)",
+  {
+    cardId: z.string().uuid(),
+    templateId: z.enum(WORKSHOP_TEMPLATE_IDS as [string, ...string[]]),
+    title: z.string().min(1).optional(),
+    actor: z.string().optional(),
+  },
+  async (input) => {
+    const board = await startWorkshopFromCard(input);
+    if (!board) {
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify({ error: "Card or template not found" }) },
+        ],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "populate_workshop_zones",
+  "Add sticky notes to workshop zones (AI fills SWOT quadrants, 5 Whys layers, etc.)",
+  {
+    boardId: z.string().uuid(),
+    zones: z.record(z.string(), z.array(z.string())),
+    actor: z.string().optional(),
+    replacePlaceholders: z.boolean().optional(),
+  },
+  async ({ boardId, zones, actor, replacePlaceholders }) => {
+    const board = await populateWorkshopZones({
+      boardId,
+      zones,
+      actor,
+      replacePlaceholders,
+    });
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ board }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "get_workshop_outcomes",
+  "Preview workshop sticky notes grouped by zone (before recording to card)",
+  { boardId: z.string().uuid() },
+  async ({ boardId }) => {
+    const board = await getVisualBoard(boardId);
+    if (!board) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    const summary = extractWorkshopOutcomes(board);
+    if (!summary) {
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify({ error: "Not a workshop board" }) },
+        ],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ summary }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  "record_workshop_outcomes",
+  "Sync workshop stickies to linked Kanban card (journal comments, description, tags)",
+  {
+    boardId: z.string().uuid(),
+    cardId: z.string().uuid().optional(),
+    actor: z.string().optional(),
+    updateDescription: z.boolean().optional(),
+    appendTags: z.boolean().optional(),
+    markComplete: z.boolean().optional(),
+  },
+  async (input) => {
+    const result = await recordWorkshopOutcomes(input);
+    if (!result) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not found" }) }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
     };
   },
 );
