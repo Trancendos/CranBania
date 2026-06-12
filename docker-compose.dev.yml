@@ -1,0 +1,32 @@
+# CranBania — Local development compose (hot-reload)
+# Usage: docker compose -f docker-compose.dev.yml up
+# Binds port 8071; hot-reloads via mounted source tree.
+# For production use docker-compose.production.yml in the root Tranc3 repo.
+
+services:
+  cranbania-dev:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev"
+    ports:
+      - "8071:8071"
+    volumes:
+      - .:/app
+      - cranbania_node_modules:/app/node_modules
+    environment:
+      PORT: "8071"
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Override per-environment:
+      # CRANBANIA_API_KEY: ""
+      # DATABASE_URL: ""
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8071/api/board"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  cranbania_node_modules:

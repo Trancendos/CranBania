@@ -1,4 +1,7 @@
-# Woodpecker CI — test, lint, build (self-hosted; no GitHub Actions).
+# CranBania — Woodpecker CI (self-hosted; no GitHub Actions)
+# Runs on: push to main, PRs, manual dispatch
+# Pipeline: lint → test → build → docker-build → docker-push (main only)
+
 when:
   - event: push
     branch: main
@@ -6,10 +9,72 @@ when:
   - event: manual
 
 steps:
-  verify:
-    image: node:22-alpine
+  # ── 1. Lint ──────────────────────────────────────────────────────────────
+  lint:
+    image: node:20-alpine
     commands:
       - npm ci
       - npm run lint
+
+  # ── 2. Test ──────────────────────────────────────────────────────────────
+  test:
+    image: node:20-alpine
+    commands:
+      - npm ci
       - npm test
+
+  # ── 3. Next.js build (validates standalone output) ────────────────────
+  build:
+    image: node:20-alpine
+    commands:
+      - npm ci
       - npm run build
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+
+  # ── 4. Docker image build ──────────────────────────────────────────────
+  docker-build:
+    image: woodpeckerci/plugin-docker-buildx:latest
+    settings:
+      repo: trancendos/cranbania
+      tags: pr-${CI_COMMIT_SHA:0:8}
+      dry_run: true   # build-only on PRs; push step handles main
+    when:
+      - event: pull_request
+
+  # ── 5. Docker image build + push to registry (main branch only) ───────
+  docker-push:
+    image: woodpeckerci/plugin-docker-buildx:latest
+    settings:
+      repo: trancendos/cranbania
+      tags:
+        - latest
+        - ${CI_COMMIT_SHA:0:8}
+      username:
+        from_secret: registry_username
+      password:
+        from_secret: registry_password
+      # Point at self-hosted registry if available:
+      # registry: registry.trancendos.com
+    when:
+      - event: push
+        branch: main
+
+  # ── 6. Notify Tranc3 main repo to update submodule pointer ────────────
+  notify-tranc3:
+    image: curlimages/curl:8.5.0
+    environment:
+      FORGEJO_URL:
+        from_secret: forgejo_url
+      FORGEJO_TOKEN:
+        from_secret: forgejo_token
+    commands:
+      - |
+        curl -sf -X POST "${FORGEJO_URL}/api/v1/repos/trancendos/tranc3/actions/workflows/sync-cranbania-submodule.yml/dispatches" \
+          -H "Authorization: token ${FORGEJO_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d '{"ref":"main","inputs":{"sha":"'"${CI_COMMIT_SHA}"'"}}'
+    when:
+      - event: push
+        branch: main
