@@ -12,7 +12,7 @@
     "sla:poll": "tsx scripts/sla-poller.ts",
     "sla:poll:once": "tsx scripts/sla-poller.ts --once",
     "webhooks:bootstrap": "tsx scripts/bootstrap-webhooks.ts",
-    "test": "tsx --test lib/*.test.ts lib/services/*.test.ts lib/automation/*.test.ts"
+    "test": "tsx --test lib/*.test.ts lib/services/*.test.ts lib/automation/*.test.ts middleware.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
