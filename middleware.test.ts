@@ -51,6 +51,23 @@ test("mutating routes fail closed in production when the key is unset", async ()
   assert.equal(res.status, 503);
 });
 
+test("cron-exempt route is not 503'd in production when the API key is unset", async () => {
+  // It authenticates with CRANBANIA_CRON_SECRET, so a missing CRANBANIA_API_KEY says
+  // nothing about whether it is safe to serve. Gating it on the wrong secret would
+  // silently stop SLA scans on a correctly configured deployment.
+  delete process.env.CRANBANIA_API_KEY;
+  setNodeEnv("production");
+  const res = middleware(req("/api/itsm/sla/check", { method: "POST" }));
+  assert.equal(res.status, 200);
+});
+
+test("the cron exemption stays method-scoped on the production fail-closed path", async () => {
+  delete process.env.CRANBANIA_API_KEY;
+  setNodeEnv("production");
+  const res = middleware(req("/api/itsm/sla/check", { method: "PUT" }));
+  assert.equal(res.status, 503);
+});
+
 test("reads stay open in production when the key is unset (no session layer to gate on)", async () => {
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");

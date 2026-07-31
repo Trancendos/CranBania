@@ -34,9 +34,21 @@ function extractApiToken(request: NextRequest): string | null {
 export function middleware(request: NextRequest) {
   const apiKey = process.env.CRANBANIA_API_KEY;
   const { pathname } = request.nextUrl;
+  // Evaluated before the missing-key branch below: these routes authenticate with
+  // CRANBANIA_CRON_SECRET, so CRANBANIA_API_KEY being unset says nothing about whether
+  // they are safe to serve. Gating them on it would 503 the SLA scan on a deployment
+  // that had correctly configured the only secret that route actually uses.
+  const cronExempt = CRON_AUTH_EXEMPT.some(
+    (e) => e.path === pathname && e.method === request.method,
+  );
 
   if (!apiKey) {
-    if (inProduction() && pathname.startsWith("/api/") && MUTATING_METHODS.has(request.method)) {
+    if (
+      inProduction() &&
+      pathname.startsWith("/api/") &&
+      MUTATING_METHODS.has(request.method) &&
+      !cronExempt
+    ) {
       return NextResponse.json(
         {
           error: "Service misconfigured",
@@ -52,9 +64,7 @@ export function middleware(request: NextRequest) {
 
   if (!pathname.startsWith("/api/")) return NextResponse.next();
   if (!MUTATING_METHODS.has(request.method)) return NextResponse.next();
-  if (CRON_AUTH_EXEMPT.some((e) => e.path === pathname && e.method === request.method)) {
-    return NextResponse.next();
-  }
+  if (cronExempt) return NextResponse.next();
 
   if (extractApiToken(request) !== apiKey) {
     return NextResponse.json(
