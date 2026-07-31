@@ -8,9 +8,11 @@ function req(path: string, init?: RequestInit) {
 }
 
 let originalApiKey: string | undefined;
+let originalNodeEnv: string | undefined;
 
 beforeEach(() => {
   originalApiKey = process.env.CRANBANIA_API_KEY;
+  originalNodeEnv = process.env.NODE_ENV;
 });
 
 afterEach(() => {
@@ -19,11 +21,47 @@ afterEach(() => {
   } else {
     process.env.CRANBANIA_API_KEY = originalApiKey;
   }
+  if (originalNodeEnv === undefined) {
+    delete (process.env as Record<string, string | undefined>).NODE_ENV;
+  } else {
+    (process.env as Record<string, string | undefined>).NODE_ENV = originalNodeEnv;
+  }
 });
+
+/** NODE_ENV is readonly in Next's ambient types; tests need to drive it directly. */
+function setNodeEnv(value: string | undefined) {
+  if (value === undefined) {
+    delete (process.env as Record<string, string | undefined>).NODE_ENV;
+  } else {
+    (process.env as Record<string, string | undefined>).NODE_ENV = value;
+  }
+}
 
 test("open when CRANBANIA_API_KEY unset (local dev)", async () => {
   delete process.env.CRANBANIA_API_KEY;
+  setNodeEnv("development");
   const res = middleware(req("/api/board", { method: "GET" }));
+  assert.equal(res.status, 200);
+});
+
+test("mutating routes fail closed in production when the key is unset", async () => {
+  delete process.env.CRANBANIA_API_KEY;
+  setNodeEnv("production");
+  const res = middleware(req("/api/cards", { method: "POST" }));
+  assert.equal(res.status, 503);
+});
+
+test("reads stay open in production when the key is unset (no session layer to gate on)", async () => {
+  delete process.env.CRANBANIA_API_KEY;
+  setNodeEnv("production");
+  const res = middleware(req("/api/board", { method: "GET" }));
+  assert.equal(res.status, 200);
+});
+
+test("non-API routes are unaffected by the production fail-closed path", async () => {
+  delete process.env.CRANBANIA_API_KEY;
+  setNodeEnv("production");
+  const res = middleware(req("/board", { method: "POST" }));
   assert.equal(res.status, 200);
 });
 
