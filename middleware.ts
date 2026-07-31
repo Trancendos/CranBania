@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { inProduction } from "./lib/services/auth";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -23,16 +24,47 @@ function extractApiToken(request: NextRequest): string | null {
 // shared-secret scheme should eventually be replaced by Infinity-One, the platform-wide
 // SSO/"one account, all services" layer) or a network boundary in front of this service,
 // not a middleware header check with no client to send the header.
+//
+// An unset key means "auth disabled", which is correct for local dev and dangerous in
+// production: this service is published at trancendos.com/townhall, so a missing env var
+// would otherwise leave every mutating route open to anyone. In production a missing key
+// is therefore treated as a misconfiguration and mutating routes fail *closed* (503)
+// rather than silently open. Reads are unaffected - they are ungated either way, per the
+// note above.
 export function middleware(request: NextRequest) {
   const apiKey = process.env.CRANBANIA_API_KEY;
-  if (!apiKey) return NextResponse.next();
-
   const { pathname } = request.nextUrl;
-  if (!pathname.startsWith("/api/")) return NextResponse.next();
-  if (!MUTATING_METHODS.has(request.method)) return NextResponse.next();
-  if (CRON_AUTH_EXEMPT.some((e) => e.path === pathname && e.method === request.method)) {
+  // Evaluated before the missing-key branch below: these routes authenticate with
+  // CRANBANIA_CRON_SECRET, so CRANBANIA_API_KEY being unset says nothing about whether
+  // they are safe to serve. Gating them on it would 503 the SLA scan on a deployment
+  // that had correctly configured the only secret that route actually uses.
+  const cronExempt = CRON_AUTH_EXEMPT.some(
+    (e) => e.path === pathname && e.method === request.method,
+  );
+
+  if (!apiKey) {
+    if (
+      inProduction() &&
+      pathname.startsWith("/api/") &&
+      MUTATING_METHODS.has(request.method) &&
+      !cronExempt
+    ) {
+      return NextResponse.json(
+        {
+          error: "Service misconfigured",
+          hint:
+            "CRANBANIA_API_KEY is not set. Mutating API routes are disabled in production " +
+            "until it is configured.",
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.next();
   }
+
+  if (!pathname.startsWith("/api/")) return NextResponse.next();
+  if (!MUTATING_METHODS.has(request.method)) return NextResponse.next();
+  if (cronExempt) return NextResponse.next();
 
   if (extractApiToken(request) !== apiKey) {
     return NextResponse.json(

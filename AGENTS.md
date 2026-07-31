@@ -149,7 +149,9 @@ GitHub Apps (CodeSlick, Debricked, Orange Pro AI, GitGuardian, etc.) may report 
 
 ## Cursor Cloud specific instructions
 
-- Use `npm` only (not Maven/Gradle). Node 18+ required.
+- Use `npm` only (not Maven/Gradle). Node 20+ required (declared in `package.json`
+  `engines`; the Dockerfile already builds on `node:20-alpine`, and dependencies in the
+  lockfile now require `>=20`).
 - Dev server: `npm run dev` (port 3000). If build fails after turbopack dev, run `rm -rf .next && npm run build`.
 - SLA scans run via `npm run sla:poll`, `npm run start:full`, or external cron — not inside the Next.js bundle. Per-card breach check still runs on create/move.
 - Removed unused `@dnd-kit/*` packages; card moves use native `<select>`.
