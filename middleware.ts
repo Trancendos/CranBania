@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { inProduction } from "./lib/services/auth";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -35,11 +36,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!apiKey) {
-    if (
-      process.env.NODE_ENV === "production" &&
-      pathname.startsWith("/api/") &&
-      MUTATING_METHODS.has(request.method)
-    ) {
+    if (inProduction() && pathname.startsWith("/api/") && MUTATING_METHODS.has(request.method)) {
       return NextResponse.json(
         {
           error: "Service misconfigured",

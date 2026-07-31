@@ -8,7 +8,15 @@
  * wants to distinguish the two.
  */
 
-function inProduction(): boolean {
+/**
+ * Single source of truth for "are we in production?".
+ *
+ * Exported because `middleware.ts` needs the same answer. Two independent
+ * `process.env.NODE_ENV === "production"` comparisons could drift, and the
+ * consequence of drift here is not cosmetic: the middleware and the route
+ * helpers would disagree about whether a missing secret denies or permits.
+ */
+export function inProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
@@ -31,7 +39,7 @@ export function extractBearerToken(request: Request): string | null {
  * True when a secret the deployment relies on is absent in production. Routes can use
  * this to answer 503 (fix the deployment) rather than 401 (fix your credential).
  */
-export function isAuthMisconfigured(kind: "cron" | "api" = "cron"): boolean {
+export function isAuthMisconfigured(kind: "cron" | "api"): boolean {
   if (!inProduction()) return false;
   return !(kind === "cron" ? getCronSecret() : getApiKey());
 }
