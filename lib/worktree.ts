@@ -23,7 +23,7 @@ function slugify(title: string): string {
 }
 
 export function branchNameForCard(cardId: string, title: string): string {
-  const short = cardId.slice(0, 8);
+  const short = cardId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
   const slug = slugify(title) || "task";
   return `card/${short}-${slug}`;
 }
@@ -51,7 +51,7 @@ export async function createWorktreeForCard(
   }
 
   const branch = branchNameForCard(cardId, title);
-  const worktreePath = path.join(worktreesRoot(), cardId);
+  const worktreePath = path.join(worktreesRoot(), cardId.replace(/[^a-zA-Z0-9]/g, ""));
   await fs.mkdir(worktreesRoot(), { recursive: true });
 
   if (await pathExists(worktreePath)) {
