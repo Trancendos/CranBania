@@ -36,3 +36,19 @@ test("epic and sprint workspace", async () => {
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
+
+import { dataDir } from "./workspace";
+
+test("dataDir prevents path traversal", async () => {
+  assert.throws(() => {
+    dataDir("..", "secrets.json");
+  }, /Path traversal detected/);
+
+  assert.throws(() => {
+    dataDir("..", "..", "etc", "passwd");
+  }, /Path traversal detected/);
+
+  // Valid paths should not throw
+  const safePath = dataDir("workspace.json");
+  assert.ok(safePath.includes("data/workspace.json") || safePath.includes("data\\workspace.json"));
+});

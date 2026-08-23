@@ -3,12 +3,18 @@ import path from "path";
 import { randomUUID } from "crypto";
 import type { Card, Epic, Sprint, SprintStatus, WorkspaceData } from "./types";
 
-function workspacePath() {
-  return path.join(process.cwd(), "data", "workspace.json");
+export function dataDir(...segments: string[]) {
+  const base = path.join(process.cwd(), "data");
+  if (segments.length === 0) return base;
+  const resolved = path.resolve(base, ...segments);
+  if (!resolved.startsWith(base + path.sep) && resolved !== base) {
+    throw new Error("Path traversal detected");
+  }
+  return resolved;
 }
 
-function dataDir() {
-  return path.join(process.cwd(), "data");
+function workspacePath() {
+  return dataDir("workspace.json");
 }
 
 async function ensureDataDir() {
