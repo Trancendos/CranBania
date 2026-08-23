@@ -104,7 +104,10 @@ export interface WorkshopOutcomeSummary {
   }>;
 }
 
-function scoreTemplate(template: WorkshopTemplate, card: Card): WorkshopSuggestion | null {
+function scoreTemplate(
+  template: WorkshopTemplate,
+  card: Card,
+): WorkshopSuggestion | null {
   let score = 0;
   const reasons: string[] = [];
   const haystack = `${card.title} ${card.description ?? ""}`.toLowerCase();
@@ -121,13 +124,19 @@ function scoreTemplate(template: WorkshopTemplate, card: Card): WorkshopSuggesti
     }
   }
 
-  if (card.cardType === "incident" && template.category === "analysis") score += 10;
-  if (card.cardType === "feature" && template.category === "brainstorm") score += 8;
-  if (card.cardType === "change" && template.category === "planning") score += 8;
-  if (card.cardType === "feature" && template.category === "design") score += 12;
-  if (card.cardType === "feature" && template.category === "roadmap") score += 10;
+  if (card.cardType === "incident" && template.category === "analysis")
+    score += 10;
+  if (card.cardType === "feature" && template.category === "brainstorm")
+    score += 8;
+  if (card.cardType === "change" && template.category === "planning")
+    score += 8;
+  if (card.cardType === "feature" && template.category === "design")
+    score += 12;
+  if (card.cardType === "feature" && template.category === "roadmap")
+    score += 10;
   if (/roadmap|timeline|wireframe|ui|ux|design/i.test(haystack)) {
-    if (template.category === "roadmap" || template.category === "timeline") score += 12;
+    if (template.category === "roadmap" || template.category === "timeline")
+      score += 12;
     if (template.category === "design") score += 12;
   }
 
@@ -142,7 +151,10 @@ function scoreTemplate(template: WorkshopTemplate, card: Card): WorkshopSuggesti
   };
 }
 
-export function suggestWorkshopsForCard(card: Card, limit = 5): WorkshopSuggestion[] {
+export function suggestWorkshopsForCard(
+  card: Card,
+  limit = 5,
+): WorkshopSuggestion[] {
   const scored = listWorkshopTemplates()
     .map((t) => scoreTemplate(t, card))
     .filter((s): s is WorkshopSuggestion => s !== null)
@@ -174,7 +186,8 @@ export async function suggestWorkshopsForCardId(
 
 function boardTypeForTemplate(template: WorkshopTemplate): VisualBoardType {
   if (template.id === "ui-design-system") return "design_system";
-  if (template.category === "design" && template.layout.startsWith("wireframe")) return "wireframe";
+  if (template.category === "design" && template.layout.startsWith("wireframe"))
+    return "wireframe";
   if (template.category === "roadmap") return "roadmap";
   return "whiteboard";
 }
@@ -219,11 +232,16 @@ export async function startWorkshopFromCard(
   return (await getVisualBoard(board.id)) ?? board;
 }
 
-function zoneIdForNode(node: VisualNode, board: VisualBoard): string | undefined {
+function zoneIdForNode(
+  node: VisualNode,
+  board: VisualBoard,
+): string | undefined {
   const metaZone = node.meta?.zoneId;
   if (typeof metaZone === "string") return metaZone;
   if (node.parentFrameId && board.workshop?.zones) {
-    const frame = board.workshop.zones.find((z) => z.frameNodeId === node.parentFrameId);
+    const frame = board.workshop.zones.find(
+      (z) => z.frameNodeId === node.parentFrameId,
+    );
     return frame?.id;
   }
   return undefined;
@@ -303,7 +321,10 @@ export async function populateWorkshopZones(
   });
 
   if (board.linkedCardId) {
-    const zoneCount = Object.values(input.zones).reduce((n, arr) => n + arr.length, 0);
+    const zoneCount = Object.values(input.zones).reduce(
+      (n, arr) => n + arr.length,
+      0,
+    );
     await addComment(
       board.linkedCardId,
       `[Workshop populated] ${template.name}: ${zoneCount} items added to canvas`,
@@ -334,7 +355,8 @@ export async function populateWorkshopWireframe(input: {
   let nodes = [...board.nodes];
   if (input.replaceExisting) {
     nodes = nodes.filter(
-      (n) => !(n.kind.startsWith("wire_") && zoneIdForNode(n, board!) === zoneId),
+      (n) =>
+        !(n.kind.startsWith("wire_") && zoneIdForNode(n, board!) === zoneId),
     );
   }
 
@@ -417,7 +439,9 @@ async function emitWorkshopCompletedWebhook(
   });
 }
 
-export function extractWorkshopOutcomes(board: VisualBoard): WorkshopOutcomeSummary | null {
+export function extractWorkshopOutcomes(
+  board: VisualBoard,
+): WorkshopOutcomeSummary | null {
   if (!board.workshopTemplateId || !board.workshop) return null;
   const template = getWorkshopTemplate(board.workshopTemplateId);
   if (!template) return null;
@@ -499,7 +523,7 @@ export async function recordWorkshopOutcomes(
       }
 
       if (input.appendTags !== false && card) {
-        const tagSet = new Set((await getCard(cardId))?.tags ?? card.tags ?? []);
+        const tagSet = new Set(card.tags ?? []);
         tagSet.add(`workshop:${summary.templateId}`);
         for (const zone of summary.zones) {
           if (zone.items.length > 0) tagSet.add(`zone:${zone.zoneId}`);
@@ -524,7 +548,8 @@ export async function recordWorkshopOutcomes(
   await updateVisualBoard(board.id, {
     workshop: {
       ...board.workshop!,
-      status: input.markComplete !== false ? "completed" : board.workshop!.status,
+      status:
+        input.markComplete !== false ? "completed" : board.workshop!.status,
       recordedAt: new Date().toISOString(),
     },
   });
@@ -541,7 +566,12 @@ export async function recordWorkshopOutcomes(
   const finalCard = cardId ? await getCard(cardId) : card;
 
   if (input.emitWebhook !== false && finalCard) {
-    await emitWorkshopCompletedWebhook(finalCard, finalBoard, summary, followUpCardIds);
+    await emitWorkshopCompletedWebhook(
+      finalCard,
+      finalBoard,
+      summary,
+      followUpCardIds,
+    );
   }
 
   return {
@@ -560,7 +590,9 @@ export async function runWorkshopForCard(
 
   const suggestions = suggestWorkshopsForCard(card, 5);
   const templateId =
-    input.templateId ?? suggestions[0]?.templateId ?? listWorkshopTemplates()[0]?.id;
+    input.templateId ??
+    suggestions[0]?.templateId ??
+    listWorkshopTemplates()[0]?.id;
   if (!templateId) return null;
 
   const board = await startWorkshopFromCard({
@@ -623,7 +655,9 @@ export async function runWorkshopForCard(
   };
 }
 
-export async function listWorkshopsForCard(cardId: string): Promise<VisualBoard[]> {
+export async function listWorkshopsForCard(
+  cardId: string,
+): Promise<VisualBoard[]> {
   return listVisualBoards({ linkedCardId: cardId }).then((boards) =>
     boards.filter((b) => b.workshopTemplateId),
   );
