@@ -114,7 +114,7 @@ export async function createCard(input: CreateCardInput): Promise<Card> {
   const board = await readBoard();
   const columnId = input.columnId ?? "backlog";
   if (!COLUMN_IDS.includes(columnId)) {
-    throw new Error(`Invalid columnId: ${columnId}`);
+    throw new Error(`Invalid column: ${columnId}`);
   }
 
   const now = new Date().toISOString();
@@ -352,7 +352,7 @@ export async function moveCard(
   options: MoveCardOptions = {},
 ): Promise<Card | null> {
   if (!COLUMN_IDS.includes(columnId)) {
-    throw new Error(`Invalid columnId: ${columnId}`);
+    throw new Error(`Invalid column: ${columnId}`);
   }
 
   const board = await readBoard();
