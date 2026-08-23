@@ -8,21 +8,14 @@ function nodeCenter(n: VisualNode) {
   return { x: n.x + n.width / 2, y: n.y + n.height / 2 };
 }
 
-function renderShape(node: VisualNode, selected: boolean) {
-  const stroke = selected ? "var(--accent)" : "var(--border)";
-  const fill =
-    node.kind === "sticky"
-      ? node.color ?? "#fef08a"
-      : node.kind === "frame"
-        ? "transparent"
-        : node.color ?? "var(--surface)";
 
-  const common = {
-    stroke,
-    strokeWidth: selected ? 2 : 1,
-    fill,
-  };
+type CommonShapeProps = {
+  stroke: string;
+  strokeWidth: number;
+  fill: string;
+};
 
+function renderBasicShape(node: VisualNode, common: CommonShapeProps) {
   switch (node.kind) {
     case "ellipse":
       return (
@@ -54,6 +47,13 @@ function renderShape(node: VisualNode, selected: boolean) {
           {...common}
         />
       );
+    default:
+      return <rect width={node.width} height={node.height} rx={6} {...common} />;
+  }
+}
+
+function renderWireframeShape(node: VisualNode, stroke: string, selected: boolean) {
+  switch (node.kind) {
     case "wire_button":
       return (
         <rect
@@ -133,8 +133,30 @@ function renderShape(node: VisualNode, selected: boolean) {
         />
       );
     default:
-      return <rect width={node.width} height={node.height} rx={6} {...common} />;
+      return null;
   }
+}
+
+function renderShape(node: VisualNode, selected: boolean) {
+  const stroke = selected ? "var(--accent)" : "var(--border)";
+  const fill =
+    node.kind === "sticky"
+      ? node.color ?? "#fef08a"
+      : node.kind === "frame"
+        ? "transparent"
+        : node.color ?? "var(--surface)";
+
+  const common = {
+    stroke,
+    strokeWidth: selected ? 2 : 1,
+    fill,
+  };
+
+  if (node.kind.startsWith("wire_")) {
+    return renderWireframeShape(node, stroke, selected) || <rect width={node.width} height={node.height} rx={6} {...common} />;
+  }
+
+  return renderBasicShape(node, common);
 }
 
 export default function VisualCanvasEditor({ boardId }: { boardId: string }) {
