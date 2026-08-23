@@ -17,6 +17,83 @@ const COLUMN_LABELS: Record<string, string> = {
   done: "Done",
 };
 
+function sortIncidents(a: IncidentRow, b: IncidentRow) {
+  if (a.sla.breached !== b.sla.breached) return a.sla.breached ? -1 : 1;
+  const pa: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  return (pa[a.card.priority] ?? 4) - (pa[b.card.priority] ?? 4);
+}
+
+function IncidentRowItem({
+  row,
+  moveCard,
+}: {
+  row: IncidentRow;
+  moveCard: (id: string, columnId: string) => void;
+}) {
+  const { card, sla } = row;
+  return (
+    <tr className="border-b border-[var(--border)] hover:bg-[var(--surface-hover)]">
+      <td className="px-4 py-3">
+        <p className="font-medium">{card.title}</p>
+        {card.description ? (
+          <p className="mt-0.5 line-clamp-1 text-xs text-[var(--muted)]">
+            {card.description}
+          </p>
+        ) : null}
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={
+            card.priority === "critical"
+              ? "text-red-400"
+              : card.priority === "high"
+                ? "text-amber-400"
+                : ""
+          }
+        >
+          {card.priority}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-xs">
+        {COLUMN_LABELS[card.columnId] ?? card.columnId}
+      </td>
+      <td className="px-4 py-3 text-xs">
+        {sla.resolved ? (
+          <span className="text-emerald-400">Resolved</span>
+        ) : sla.breached ? (
+          <span className="text-red-400">Breached</span>
+        ) : sla.remainingMs != null ? (
+          formatSlaRemaining(sla.remainingMs)
+        ) : (
+          "—"
+        )}
+      </td>
+      <td className="px-4 py-3 text-xs text-[var(--muted)]">
+        {card.assignee ? `@${card.assignee}` : "—"}
+      </td>
+      <td className="px-4 py-3">
+        {card.columnId !== "in_progress" && card.columnId !== "done" ? (
+          <button
+            type="button"
+            className="rounded bg-[var(--accent)] px-2 py-1 text-xs text-white"
+            onClick={() => void moveCard(card.id, "in_progress")}
+          >
+            Start work
+          </button>
+        ) : card.columnId === "in_progress" ? (
+          <button
+            type="button"
+            className="rounded border border-[var(--border)] px-2 py-1 text-xs"
+            onClick={() => void moveCard(card.id, "review")}
+          >
+            → Review
+          </button>
+        ) : null}
+      </td>
+    </tr>
+  );
+}
+
 export default function IncidentQueue() {
   const [rows, setRows] = useState<IncidentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,76 +193,9 @@ export default function IncidentQueue() {
               </tr>
             </thead>
             <tbody>
-              {visible
-                .sort((a, b) => {
-                  if (a.sla.breached !== b.sla.breached) return a.sla.breached ? -1 : 1;
-                  const pa = { critical: 0, high: 1, medium: 2, low: 3 };
-                  return pa[a.card.priority] - pa[b.card.priority];
-                })
-                .map(({ card, sla }) => (
-                  <tr
-                    key={card.id}
-                    className="border-b border-[var(--border)] hover:bg-[var(--surface-hover)]"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{card.title}</p>
-                      {card.description ? (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-[var(--muted)]">
-                          {card.description}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          card.priority === "critical"
-                            ? "text-red-400"
-                            : card.priority === "high"
-                              ? "text-amber-400"
-                              : ""
-                        }
-                      >
-                        {card.priority}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {COLUMN_LABELS[card.columnId] ?? card.columnId}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {sla.resolved ? (
-                        <span className="text-emerald-400">Resolved</span>
-                      ) : sla.breached ? (
-                        <span className="text-red-400">Breached</span>
-                      ) : sla.remainingMs != null ? (
-                        formatSlaRemaining(sla.remainingMs)
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[var(--muted)]">
-                      {card.assignee ? `@${card.assignee}` : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {card.columnId !== "in_progress" && card.columnId !== "done" ? (
-                        <button
-                          type="button"
-                          className="rounded bg-[var(--accent)] px-2 py-1 text-xs text-white"
-                          onClick={() => void moveCard(card.id, "in_progress")}
-                        >
-                          Start work
-                        </button>
-                      ) : card.columnId === "in_progress" ? (
-                        <button
-                          type="button"
-                          className="rounded border border-[var(--border)] px-2 py-1 text-xs"
-                          onClick={() => void moveCard(card.id, "review")}
-                        >
-                          → Review
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
+              {visible.sort(sortIncidents).map((row) => (
+                <IncidentRowItem key={row.card.id} row={row} moveCard={moveCard} />
+              ))}
             </tbody>
           </table>
         </div>
