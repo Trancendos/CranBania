@@ -3,51 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SprintBurndown } from "@/lib/workspace";
 
-export default function BurndownChart({ sprintId }: { sprintId: string | null }) {
-  const [data, setData] = useState<SprintBurndown | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!sprintId) {
-      setData(null);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/sprints/${sprintId}/burndown`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json.burndown ?? null);
-      } else {
-        setData(null);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [sprintId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (!sprintId) {
-    return (
-      <p className="text-xs text-[var(--muted)]">
-        Select a sprint to view burndown (story points).
-      </p>
-    );
-  }
-
-  if (loading && !data) {
-    return <p className="text-xs text-[var(--muted)]">Loading burndown…</p>;
-  }
-
-  if (!data || data.series.length === 0) {
-    return (
-      <p className="text-xs text-[var(--muted)]">No burndown data for this sprint.</p>
-    );
-  }
-
+export function BurndownChartUI({ data }: { data: SprintBurndown }) {
   const width = 480;
   const height = 160;
   const pad = { top: 12, right: 12, bottom: 28, left: 36 };
@@ -152,4 +109,52 @@ export default function BurndownChart({ sprintId }: { sprintId: string | null })
       </svg>
     </div>
   );
+}
+
+export default function BurndownChart({ sprintId }: { sprintId: string | null }) {
+  const [data, setData] = useState<SprintBurndown | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!sprintId) {
+      setData(null);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/sprints/${sprintId}/burndown`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json.burndown ?? null);
+      } else {
+        setData(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [sprintId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!sprintId) {
+    return (
+      <p className="text-xs text-[var(--muted)]">
+        Select a sprint to view burndown (story points).
+      </p>
+    );
+  }
+
+  if (loading && !data) {
+    return <p className="text-xs text-[var(--muted)]">Loading burndown…</p>;
+  }
+
+  if (!data || data.series.length === 0) {
+    return (
+      <p className="text-xs text-[var(--muted)]">No burndown data for this sprint.</p>
+    );
+  }
+
+  return <BurndownChartUI data={data} />;
 }
