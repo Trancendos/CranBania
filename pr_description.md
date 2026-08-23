@@ -1,0 +1,3 @@
+🎯 **What:** Added a test for the webhook dispatch error handling in `lib/webhooks.ts`. The `dispatchWebhooks` function catches exceptions thrown during the `fetch` call and wraps them in a failure result. We wanted to make sure that these error scenarios are properly logged and formatted in the resulting array.
+📊 **Coverage:** The new test covers the case where `global.fetch` fails with a network error during the webhook delivery attempt, confirming that a result object with `ok: false` and the error message string is returned.
+✨ **Result:** Enhanced test coverage for the `dispatchWebhooks` flow inside `lib/webhooks.ts`, ensuring that errors in webhook requests are effectively caught and the error field is correctly populated.
