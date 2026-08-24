@@ -23,8 +23,8 @@ test("epic and sprint workspace", async () => {
     assert.equal(sprint.status, "active");
 
     const burndown = await getSprintBurndown(sprint.id, [
-      { sprintId: sprint.id, columnId: "done", storyPoints: 3 },
-      { sprintId: sprint.id, columnId: "in_progress", storyPoints: 5 },
+      { sprintId: sprint.id, columnId: "done", storyPoints: 3, id: "c1", title: "", description: "", cardType: "task", priority: "medium", order: 0, tags: [], journal: [], codeChanges: [], createdAt: "", updatedAt: "" } as any,
+      { sprintId: sprint.id, columnId: "in_progress", storyPoints: 5, id: "c2", title: "", description: "", cardType: "task", priority: "medium", order: 0, tags: [], journal: [], codeChanges: [], createdAt: "", updatedAt: "" } as any,
     ]);
     assert.ok(burndown);
     assert.equal(burndown!.totalPoints, 8);

@@ -31,6 +31,7 @@ test("suggest workshops for incident card prefers analysis templates", () => {
     cardType: "incident" as const,
     columnId: "backlog" as const,
     priority: "high" as const,
+    order: 0,
     tags: [],
     journal: [],
     codeChanges: [],
