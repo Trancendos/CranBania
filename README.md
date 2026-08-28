@@ -66,7 +66,7 @@ Plus all v0.2 routes: journal, comments, code-changes, webhooks (`card.in_progre
 
 ## Production auth
 
-Set `CRANBANIA_API_KEY` to require a bearer token on all mutating `/api/*` routes. Set `CRANBANIA_CRON_SECRET` for `POST /api/itsm/sla/check`.
+Set `CRANBANIA_API_KEY` to require a bearer token on all mutating `/api/*` routes (enforced in `middleware.ts`) and on `GET /api/automation/status`, which reports scheduler state and integration health and has no browser client. Set `CRANBANIA_CRON_SECRET` for `POST /api/itsm/sla/check`.
 
 ```bash
 curl -X POST http://localhost:3000/api/cards \

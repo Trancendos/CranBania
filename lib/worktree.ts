@@ -22,8 +22,37 @@ function slugify(title: string): string {
     .slice(0, 40);
 }
 
+// Card ids are server-generated (randomUUID in lib/board.ts), so today nothing
+// hostile reaches here. This validates anyway, because two things downstream
+// treat the id as trusted and neither would fail safely if that ever changed:
+//
+//   - branchNameForCard puts it in a git branch name. git() passes an argv
+//     array to execFile, so there is no shell to inject into -- but an id
+//     beginning with "-" still becomes a *flag* rather than a branch name.
+//   - createWorktreeForCard joins it onto worktreesRoot(), where "../.." walks
+//     out of the worktrees directory entirely.
+//
+// Rejecting is deliberate rather than sanitising the value into something safe.
+// Stripping characters silently changes the worktree path of every existing
+// card -- data/worktrees/<uuid-with-hyphens> would no longer be found, so
+// pathExists() misses the existing tree and a second one is created beside it,
+// orphaning the first. An id that does not match this shape is a bug or an
+// attack, and either is better surfaced than quietly rewritten.
+const SAFE_CARD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+function assertSafeCardId(cardId: string): string {
+  if (!SAFE_CARD_ID.test(cardId)) {
+    throw new Error(
+      `Unsafe card id ${JSON.stringify(cardId)}: expected an identifier starting ` +
+        "with a letter or digit, containing only letters, digits, hyphens and " +
+        "underscores.",
+    );
+  }
+  return cardId;
+}
+
 export function branchNameForCard(cardId: string, title: string): string {
-  const short = cardId.slice(0, 8);
+  const short = assertSafeCardId(cardId).slice(0, 8);
   const slug = slugify(title) || "task";
   return `card/${short}-${slug}`;
 }
@@ -51,7 +80,7 @@ export async function createWorktreeForCard(
   }
 
   const branch = branchNameForCard(cardId, title);
-  const worktreePath = path.join(worktreesRoot(), cardId);
+  const worktreePath = path.join(worktreesRoot(), assertSafeCardId(cardId));
   await fs.mkdir(worktreesRoot(), { recursive: true });
 
   if (await pathExists(worktreePath)) {

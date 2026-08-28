@@ -23,7 +23,7 @@
 
 | Env | Protects |
 |-----|----------|
-| `CRANBANIA_API_KEY` | All mutating `/api/*` (middleware) |
+| `CRANBANIA_API_KEY` | All mutating `/api/*` (middleware) + `GET /api/automation/status` |
 | `CRANBANIA_CRON_SECRET` | `POST /api/itsm/sla/check` only |
 
 Headers: `Authorization: Bearer …` or `X-CranBania-Api-Key`.
