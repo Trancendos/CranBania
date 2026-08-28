@@ -1,0 +1,36 @@
+# pre-commit.ci is installed on this repository but no config existed, so
+# every pull request got `pre-commit.ci - pr: error during ci config` and a
+# red status. That was repo-wide and long-standing -- PR #12, opened
+# 2026-08-21, carries the identical error -- and it blocked every PR from
+# reaching a fully green state regardless of its contents.
+#
+# Deliberately check-only. pre-commit.ci pushes autofix commits back onto the
+# PR branch, so a formatting hook here would rewrite files across a repo that
+# has never been through one and bury real diffs under the churn. Every hook
+# below either passes or reports; none rewrites a file. Formatting stays with
+# `npm run lint` (eslint), which is already the repo's convention.
+#
+# Linting and tests are not duplicated here on purpose: `npm test` and
+# `npm run lint` need node_modules, and pre-commit.ci runs without them.
+
+ci:
+  # The autofix PR flow is off for the same reason the hooks are check-only.
+  autofix_prs: false
+  autoupdate_schedule: monthly
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+        # package-lock.json is machine-generated and enormous; npm owns its
+        # validity, and parsing it on every commit is pure cost.
+        exclude: ^package-lock\.json$
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+        # Same reason as check-json: the lockfile is legitimately large.
+        exclude: ^package-lock\.json$
