@@ -44,11 +44,14 @@ test("open when CRANBANIA_API_KEY unset (local dev)", async () => {
   assert.equal(res.status, 200);
 });
 
-test("mutating routes fail closed in production when the key is unset", async () => {
+test("all API routes fail closed in production when the key is unset", async () => {
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");
   const res = middleware(req("/api/cards", { method: "POST" }));
   assert.equal(res.status, 503);
+
+  const resRead = middleware(req("/api/board", { method: "GET" }));
+  assert.equal(resRead.status, 503);
 });
 
 test("cron-exempt route is not 503'd in production when the API key is unset", async () => {
@@ -68,13 +71,6 @@ test("the cron exemption stays method-scoped on the production fail-closed path"
   assert.equal(res.status, 503);
 });
 
-test("reads stay open in production when the key is unset (no session layer to gate on)", async () => {
-  delete process.env.CRANBANIA_API_KEY;
-  setNodeEnv("production");
-  const res = middleware(req("/api/board", { method: "GET" }));
-  assert.equal(res.status, 200);
-});
-
 test("non-API routes are unaffected by the production fail-closed path", async () => {
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");
@@ -82,10 +78,10 @@ test("non-API routes are unaffected by the production fail-closed path", async (
   assert.equal(res.status, 200);
 });
 
-test("GET/read routes stay open even when the key is set (no session mechanism for the browser UI to use)", async () => {
+test("GET/read routes are now gated when the key is set", async () => {
   process.env.CRANBANIA_API_KEY = "test-key";
   const res = middleware(req("/api/board", { method: "GET" }));
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 401);
 });
 
 test("mutating routes are gated when the key is set", async () => {
@@ -102,6 +98,35 @@ test("mutating routes are gated when the key is set", async () => {
   assert.equal(allowed.status, 200);
 });
 
+test("UI routes are redirected to login when the key is set and unauthenticated", async () => {
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const res = middleware(req("/board", { method: "GET" }));
+  assert.equal(res.status, 307);
+  assert.equal(res.headers.get("location"), "http://x/login");
+});
+
+test("UI routes are allowed when cookie is present", async () => {
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const request = req("/board", { method: "GET" });
+  request.cookies.set("cranbania_session", "test-key");
+  const res = middleware(request);
+  assert.equal(res.status, 200);
+});
+
+test("API routes are allowed when cookie is present", async () => {
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const request = req("/api/cards", { method: "POST" });
+  request.cookies.set("cranbania_session", "test-key");
+  const res = middleware(request);
+  assert.equal(res.status, 200);
+});
+
+test("auth API routes are always open", async () => {
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const res = middleware(req("/api/auth/login", { method: "POST" }));
+  assert.equal(res.status, 200);
+});
+
 test("cron-secret POST route is exempt from CRANBANIA_API_KEY", async () => {
   process.env.CRANBANIA_API_KEY = "test-key";
   const res = middleware(req("/api/itsm/sla/check", { method: "POST" }));
@@ -114,10 +139,4 @@ test("the cron exemption is scoped to POST, not the whole path", async () => {
   // middleware itself must not blanket-exempt the path regardless of method.
   const res = middleware(req("/api/itsm/sla/check", { method: "PUT" }));
   assert.equal(res.status, 401);
-});
-
-test("non-API routes are never gated", async () => {
-  process.env.CRANBANIA_API_KEY = "test-key";
-  const res = middleware(req("/board", { method: "GET" }));
-  assert.equal(res.status, 200);
 });
