@@ -31,6 +31,11 @@ test("board CRUD and move workflow", async () => {
     assert.equal(card.journal.length, 1);
     assert.equal(card.journal[0].type, "created");
 
+    await assert.rejects(
+      moveCard(card.id, "invalid_column" as any),
+      /Invalid column: invalid_column/
+    );
+
     const moved = await moveCard(card.id, "planning", undefined, {
       skipSideEffects: true,
     });
