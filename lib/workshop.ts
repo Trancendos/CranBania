@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { addComment, createCard, getCard, updateCard } from "./board";
+import { addComment, addComments, createCard, getCard, updateCard } from "./board";
 import { emitCardEvent } from "./services/event-bus";
 import type { Card } from "./types";
 import { cardToWebhookPayload } from "./webhooks";
@@ -477,14 +477,14 @@ export async function recordWorkshopOutcomes(
   if (cardId) {
     card = await getCard(cardId);
     if (card) {
+      const commentsToAdd: string[] = [];
       for (const zone of summary.zones) {
         for (const item of zone.items) {
-          await addComment(
-            cardId,
-            `[Workshop · ${summary.templateName} · ${zone.label}] ${item}`,
-            input.actor ?? "agent",
-          );
+          commentsToAdd.push(`[Workshop · ${summary.templateName} · ${zone.label}] ${item}`);
         }
+      }
+      if (commentsToAdd.length > 0) {
+        await addComments(cardId, commentsToAdd, input.actor ?? "agent");
       }
 
       if (input.updateDescription !== false) {
