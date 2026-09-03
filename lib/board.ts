@@ -110,6 +110,78 @@ export interface CreateCardInput {
   storyPoints?: number;
 }
 
+
+export async function createCards(inputs: CreateCardInput[]): Promise<Card[]> {
+  const board = await readBoard();
+  const now = new Date().toISOString();
+  const activeSprint = await getActiveSprint();
+  const newCards: Card[] = [];
+
+  for (const input of inputs) {
+    const columnId = input.columnId ?? "backlog";
+    if (!COLUMN_IDS.includes(columnId)) {
+      throw new Error(`Invalid columnId: ${columnId}`);
+    }
+
+    const actor = input.actor ?? "human";
+    const cardType = input.cardType ?? "task";
+    const sprintId = input.sprintId ?? activeSprint?.id;
+    const journal: JournalEntry[] = [
+      createJournalEntry(
+        "created",
+        `Card created in ${columnId} (${cardType})`,
+        actor,
+        { columnId, title: input.title, cardType },
+      ),
+    ];
+    if (sprintId && !input.sprintId && activeSprint) {
+      journal.push(
+        createJournalEntry(
+          "updated",
+          `Auto-assigned to sprint: ${activeSprint.name}`,
+          "system",
+          { sprintId: activeSprint.id },
+        ),
+      );
+    }
+    const card: Card = migrateCard({
+      id: randomUUID(),
+      title: input.title,
+      description: input.description ?? "",
+      columnId,
+      order: nextOrder(board.cards, columnId),
+      assignee: input.assignee,
+      tags: input.tags ?? [],
+      cardType,
+      priority: input.priority,
+      epicId: input.epicId,
+      sprintId,
+      prince2Stage: input.prince2Stage,
+      slaResponseHours: input.slaResponseHours,
+      slaDueAt: input.slaDueAt,
+      storyPoints: input.storyPoints,
+      journal,
+      codeChanges: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    board.cards.push(card);
+    newCards.push(card);
+  }
+
+  if (newCards.length > 0) {
+    await writeBoard(board);
+    for (const card of newCards) {
+      await runSlaBreachCheckForCard(card.id);
+    }
+  }
+
+  // Refetch cards since SLA checks might have modified them
+  const finalBoard = await readBoard();
+  return newCards.map(c => finalBoard.cards.find(fc => fc.id === c.id) ?? c);
+}
+
 export async function createCard(input: CreateCardInput): Promise<Card> {
   const board = await readBoard();
   const columnId = input.columnId ?? "backlog";
@@ -413,6 +485,47 @@ export async function moveCard(
   await writeBoard(board);
   await runSlaBreachCheckForCard(id);
   return (await getCard(id)) ?? updated;
+}
+
+
+export interface AddCommentInput {
+  id: string;
+  message: string;
+  actor?: string;
+}
+
+export async function addComments(inputs: AddCommentInput[]): Promise<(Card | null)[]> {
+  const board = await readBoard();
+  const results: (Card | null)[] = [];
+  let boardModified = false;
+
+  for (const input of inputs) {
+    const index = findCardIndex(board, input.id);
+    if (index === -1) {
+      results.push(null);
+      continue;
+    }
+
+    const card = board.cards[index];
+    const actor = input.actor ?? "human";
+    const updated: Card = {
+      ...card,
+      journal: [
+        ...card.journal,
+        createJournalEntry("comment", input.message, actor),
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+    board.cards[index] = updated;
+    results.push(updated);
+    boardModified = true;
+  }
+
+  if (boardModified) {
+    await writeBoard(board);
+  }
+
+  return results;
 }
 
 export async function addComment(

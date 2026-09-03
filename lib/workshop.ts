@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { addComment, createCard, getCard, updateCard } from "./board";
+import { addComment, addComments, createCards, getCard, updateCard } from "./board";
 import { emitCardEvent } from "./services/event-bus";
 import type { Card } from "./types";
 import { cardToWebhookPayload } from "./webhooks";
@@ -365,12 +365,12 @@ async function createFollowUpCardsFromWorkshop(
   if (!parent) return [];
 
   const actionZones = resolveActionZoneIds(template);
-  const ids: string[] = [];
+  const createInputs: import("./board").CreateCardInput[] = [];
 
   for (const zone of summary.zones) {
     if (!actionZones.includes(zone.zoneId)) continue;
     for (const item of zone.items) {
-      const child = await createCard({
+      createInputs.push({
         title: item.slice(0, 120),
         description: `Follow-up from **${summary.templateName}** (${zone.label}).\n\nParent card: ${parent.title} (${parentCardId})`,
         columnId: "backlog",
@@ -383,13 +383,26 @@ async function createFollowUpCardsFromWorkshop(
         epicId: parent.epicId,
         sprintId: parent.sprintId,
       });
-      await addComment(
-        parentCardId,
-        `[Workshop follow-up created] ${child.title} (${child.id})`,
-        actor,
-      );
-      ids.push(child.id);
     }
+  }
+
+  if (createInputs.length === 0) return [];
+
+  const createdCards = await createCards(createInputs);
+  const ids: string[] = [];
+  const commentInputs: import("./board").AddCommentInput[] = [];
+
+  for (const child of createdCards) {
+    ids.push(child.id);
+    commentInputs.push({
+      id: parentCardId,
+      message: `[Workshop follow-up created] ${child.title} (${child.id})`,
+      actor,
+    });
+  }
+
+  if (commentInputs.length > 0) {
+    await addComments(commentInputs);
   }
 
   return ids;
