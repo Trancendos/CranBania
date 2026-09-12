@@ -553,15 +553,18 @@ export async function getPrince2Overview(): Promise<
   Record<Prince2Stage, number>
 > {
   const board = await readBoard();
-  const counts = {} as Record<Prince2Stage, number>;
-  for (const stage of [
-    "starting_up",
-    "initiation",
-    "delivery",
-    "stage_boundary",
-    "closing",
-  ] as Prince2Stage[]) {
-    counts[stage] = board.cards.filter((c) => c.prince2Stage === stage).length;
-  }
-  return counts;
+  const initialCounts: Record<Prince2Stage, number> = {
+    starting_up: 0,
+    initiation: 0,
+    delivery: 0,
+    stage_boundary: 0,
+    closing: 0,
+  };
+
+  return board.cards.reduce((acc, card) => {
+    if (card.prince2Stage && acc[card.prince2Stage] !== undefined) {
+      acc[card.prince2Stage]++;
+    }
+    return acc;
+  }, initialCounts);
 }
