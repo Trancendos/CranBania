@@ -415,6 +415,31 @@ export async function moveCard(
   return (await getCard(id)) ?? updated;
 }
 
+export async function addComments(
+  id: string,
+  messages: string[],
+  actor = "human",
+): Promise<Card | null> {
+  const board = await readBoard();
+  const index = findCardIndex(board, id);
+  if (index === -1) return null;
+
+  const card = board.cards[index];
+  const newEntries = messages.map(msg => createJournalEntry("comment", msg, actor));
+
+  const updated: Card = {
+    ...card,
+    journal: [
+      ...card.journal,
+      ...newEntries,
+    ],
+    updatedAt: new Date().toISOString(),
+  };
+  board.cards[index] = updated;
+  await writeBoard(board);
+  return updated;
+}
+
 export async function addComment(
   id: string,
   message: string,
