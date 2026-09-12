@@ -499,7 +499,7 @@ export async function recordWorkshopOutcomes(
       }
 
       if (input.appendTags !== false && card) {
-        const tagSet = new Set((await getCard(cardId))?.tags ?? card.tags ?? []);
+        const tagSet = new Set(card.tags ?? []);
         tagSet.add(`workshop:${summary.templateId}`);
         for (const zone of summary.zones) {
           if (zone.items.length > 0) tagSet.add(`zone:${zone.zoneId}`);
