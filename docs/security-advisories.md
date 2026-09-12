@@ -3,7 +3,7 @@
 Standing record of `npm audit` findings that remain open after remediation, with the
 reasoning for each. Reviewed whenever the lockfile changes or a new advisory lands.
 
-**Last reviewed:** 2026-07-31 (Next.js 15.5.19 → 15.5.22)
+**Last reviewed:** 2026-09-11 (Next.js 15.5.23 → 15.5.25)
 
 ## Summary
 
@@ -11,12 +11,18 @@ reasoning for each. Reviewed whenever the lockfile changes or a new advisory lan
 |---|---|---|---|
 | 2026-07-31 (before) | 11 (2 low, 2 moderate, 7 high) | — | — |
 | 2026-07-31 (after) | 3 high | 8 | 3 |
+| 2026-09-11 (before) | 1 critical | — | — |
+| 2026-09-11 (after) | 3 high | 1 | 3 |
 
 `npm audit fix` moved Next.js from 15.5.19 to 15.5.22, closing all eight advisories
 filed against Next.js itself — including *Unauthenticated disclosure of internal Server
 Function endpoints* (GHSA-955p-x3mx-jcvp), the SSRF pair, and the Server Actions DoS —
 plus the js-yaml quadratic-CPU advisory. The build, the 38-test suite and the Docker
 image were all re-verified against the new lockfile.
+
+**2026-09-11 update:** Next.js was upgraded from 15.5.23 to 15.5.25 to remediate
+GHSA-2xp9-vwfh-vxw4, a critical remote code execution vulnerability in image optimization
+affecting AVIF file processing via the underlying libheif library.
 
 ## Accepted findings
 
@@ -53,8 +59,22 @@ accepted with the mitigations below.
 - **Disposition:** ACCEPT — derived finding
 - **Reasoning:** `npm audit` attributes this entry to `next` only because it *"depends on
   vulnerable versions of postcss and sharp"*. Every advisory filed against Next.js itself
-  was closed by 15.5.22. This entry clears automatically when either dependency above is
-  bumped upstream.
+  was closed by 15.5.22 and 15.5.25. This entry clears automatically when either dependency
+  above is bumped upstream.
+
+## Remediated Next.js advisories
+
+### GHSA-2xp9-vwfh-vxw4 — Remote code execution in AVIF processing (critical)
+
+- **CVE:** None assigned
+- **Severity:** Critical
+- **Description:** A vulnerability in the underlying `libheif` library used by `sharp` which
+  Next.js uses for image optimization can lead to remote code execution when AVIF files are
+  optimized. Until a fix propagated, optimization of AVIF files was disabled by the Next.js
+  team.
+- **Affected versions:** < 15.5.25
+- **Remediation:** Upgraded Next.js from 15.5.23 to 15.5.25 on 2026-09-11
+- **Status:** Resolved
 
 ## Review triggers
 
