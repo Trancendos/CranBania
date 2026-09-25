@@ -116,14 +116,24 @@ export async function deriveSessionToken(apiKey: string): Promise<string> {
  * Constant-time string comparison.
  *
  * `===` on a secret returns as soon as two bytes differ, so the time it takes
- * to reject a guess reports how much of the guess was right. Both values here
- * are fixed-length hex, so comparing every character costs nothing.
+ * to reject a guess reports how much of the guess was right.
+ *
+ * The early `return false` on a length mismatch was the same leak one level
+ * out. It is harmless for the session cookie, which is always 64 hex
+ * characters, but this function also compares a login body against
+ * CRANBANIA_API_KEY — attacker-supplied input against a secret of unknown,
+ * unconstrained length. Returning early there reports the key's length. The
+ * comparison now runs over the longer of the two either way, and the length
+ * mismatch is folded into the accumulator rather than short-circuiting.
+ * (sourcery-ai)
  */
 export function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  let diff = a.length === b.length ? 0 : 1;
+  const span = Math.max(a.length, b.length);
+  for (let i = 0; i < span; i += 1) {
+    // charCodeAt past the end is NaN, and NaN | 0 is 0, so a missing character
+    // is compared as 0 rather than skipped.
+    diff |= (a.charCodeAt(i) | 0) ^ (b.charCodeAt(i) | 0);
   }
   return diff === 0;
 }

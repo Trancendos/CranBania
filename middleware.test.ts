@@ -2,7 +2,7 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { middleware } from "./middleware";
-import { SESSION_COOKIE, deriveSessionToken } from "./lib/services/auth";
+import { SESSION_COOKIE, deriveSessionToken, timingSafeEqual } from "./lib/services/auth";
 
 function req(path: string, init?: RequestInit) {
   return new NextRequest(new Request(`http://x${path}`, init));
@@ -185,4 +185,40 @@ test("the login route stays reachable unauthenticated, or nobody can log in", as
 test("the derived token is stable, so no server-side session store is needed", async () => {
   assert.equal(await deriveSessionToken("k"), await deriveSessionToken("k"));
   assert.notEqual(await deriveSessionToken("k"), await deriveSessionToken("k2"));
+});
+
+test("the container health probe stays open, with and without a key", async () => {
+  // The Dockerfile's HEALTHCHECK runs `wget --spider /api/health` with no
+  // credential. Gating read routes turned the old probe path (/api/board) into
+  // a 401 with the key set and a 503 without it, so every container reported
+  // unhealthy while serving traffic normally. (chatgpt-codex-connector)
+  process.env.CRANBANIA_API_KEY = "test-key";
+  setNodeEnv("production");
+  const gated = await middleware(req("/api/health", { method: "GET" }));
+  assert.equal(gated.status, 200);
+
+  delete process.env.CRANBANIA_API_KEY;
+  const ungated = await middleware(req("/api/health", { method: "GET" }));
+  assert.equal(ungated.status, 200);
+});
+
+test("the health probe is the only read route left open", async () => {
+  // Otherwise the exemption above could widen without anything noticing.
+  process.env.CRANBANIA_API_KEY = "test-key";
+  setNodeEnv("production");
+  for (const path of ["/api/board", "/api/cards", "/api/workspace", "/api/summary"]) {
+    const res = await middleware(req(path, { method: "GET" }));
+    assert.equal(res.status, 401, `${path} should be gated`);
+  }
+});
+
+test("timingSafeEqual does not report the secret's length", async () => {
+  // It compares a login body against CRANBANIA_API_KEY, whose length is not
+  // fixed, so returning early on a length mismatch leaked it. (sourcery-ai)
+  assert.equal(timingSafeEqual("abc", "abc"), true);
+  assert.equal(timingSafeEqual("abc", "abd"), false);
+  assert.equal(timingSafeEqual("abc", "abcd"), false);
+  assert.equal(timingSafeEqual("abcd", "abc"), false);
+  assert.equal(timingSafeEqual("", ""), true);
+  assert.equal(timingSafeEqual("", "a"), false);
 });
