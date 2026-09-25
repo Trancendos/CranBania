@@ -9,6 +9,7 @@ import {
   addVisualNode,
   createVisualBoard,
   deleteVisualBoard,
+  deleteVisualEdge,
   deleteVisualNode,
   getVisualBoard,
   listVisualBoards,
@@ -140,6 +141,45 @@ test("visual nodes, edges, and canvas replace", async () => {
     assert.ok(replaced);
     assert.equal(replaced!.nodes.length, 2);
     assert.equal(replaced!.edges.length, 1);
+  } finally {
+    process.chdir(originalCwd);
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+
+test("deleteVisualEdge edge cases", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cranbania-visual-"));
+  process.chdir(tmp);
+
+  try {
+    const board = await createVisualBoard({ title: "Canvas", boardType: "whiteboard" });
+    const n1 = randomUUID();
+    const n2 = randomUUID();
+    const e1 = randomUUID();
+
+    await replaceVisualCanvas(board.id, [
+      { id: n1, kind: "ellipse", x: 0, y: 0, width: 100, height: 50, text: "Start" },
+      { id: n2, kind: "rectangle", x: 150, y: 0, width: 100, height: 50, text: "End" },
+    ], [
+      { id: e1, fromNodeId: n1, toNodeId: n2 }
+    ]);
+
+    // Attempt to delete a non-existent edge
+    const result = await deleteVisualEdge(board.id, randomUUID());
+    assert.ok(result);
+    assert.equal(result!.edges.length, 1);
+    assert.equal(result!.edges[0].id, e1);
+
+    // Attempt to delete a non-existent board
+    const nullResult = await deleteVisualEdge(randomUUID(), e1);
+    assert.equal(nullResult, null);
+
+    // Successfully delete the existing edge
+    const deleted = await deleteVisualEdge(board.id, e1);
+    assert.ok(deleted);
+    assert.equal(deleted!.edges.length, 0);
+
   } finally {
     process.chdir(originalCwd);
     await fs.rm(tmp, { recursive: true, force: true });

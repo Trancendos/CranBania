@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import { createSprint, createEpic, getSprintBurndown } from "./workspace";
+import { createSprint, createEpic, getSprintBurndown, readWorkspace } from "./workspace";
 
 const originalCwd = process.cwd();
 
@@ -31,6 +31,30 @@ test("epic and sprint workspace", async () => {
     assert.equal(burndown!.donePoints, 3);
     assert.ok(Array.isArray(burndown!.series));
     assert.ok(burndown!.series.length > 0);
+  } finally {
+    process.chdir(originalCwd);
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+
+test("createEpic standalone", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cranbania-ws-epic-"));
+  process.chdir(tmp);
+  try {
+    const title = "New API";
+    const desc = "Implement new API endpoints";
+    const epic = await createEpic(title, desc);
+
+    assert.ok(epic.id, "Should generate an id");
+    assert.equal(epic.title, title, "Should set title");
+    assert.equal(epic.description, desc, "Should set description");
+    assert.equal(epic.status, "open", "Default status should be open");
+    assert.ok(epic.createdAt, "Should set createdAt");
+
+    const ws = await readWorkspace();
+    assert.equal(ws.epics.length, 1);
+    assert.deepEqual(ws.epics[0], epic);
   } finally {
     process.chdir(originalCwd);
     await fs.rm(tmp, { recursive: true, force: true });
