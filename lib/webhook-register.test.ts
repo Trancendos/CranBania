@@ -13,7 +13,9 @@ test("webhook registration workflow", async () => {
   // This avoids altering `process.cwd()` which can cause issues with test runners.
   let webhookFile = JSON.stringify({ webhooks: [] });
   mock.method(fs, "readFile", async () => webhookFile);
-  mock.method(fs, "writeFile", async (_path: any, data: any) => { webhookFile = data; });
+  mock.method(fs, "writeFile", async (_path: unknown, data: unknown) => {
+    webhookFile = String(data);
+  });
   mock.method(fs, "mkdir", async () => {});
 
   try {

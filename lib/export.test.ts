@@ -9,7 +9,7 @@ import { createCard, readBoard } from "./board";
 import { createEpic, readWorkspace } from "./workspace";
 import { createVisualBoard, readVisualBoards } from "./visual-board";
 import { writeWebhooks, readWebhooks } from "./webhooks";
-import type { WorkspaceExport } from "./types";
+import type { WebhookConfig, WorkspaceExport } from "./types";
 
 const originalCwd = process.cwd();
 
@@ -89,7 +89,7 @@ test("exportWorkspace and importWorkspace", async () => {
 
     // 5. Test importWorkspace - Error Mode
     await assert.rejects(
-      importWorkspace({ ...exported, version: 1 as any }, "merge"),
+      importWorkspace({ ...exported, version: 1 as unknown as typeof exported.version }, "merge"),
       /Unsupported export version/
     );
 
@@ -106,8 +106,8 @@ test("exportWebhooksBackup and restoreWebhooks", async () => {
   try {
     const webhooks = [
       { id: "env-1", url: "http://env", enabled: true, events: [] },
-      { id: "custom-1", url: "http://custom", enabled: true, events: [] }
-    ] as any[];
+      { id: "custom-1", url: "http://custom", enabled: true, events: [] },
+    ] satisfies WebhookConfig[];
 
     await writeWebhooks(webhooks);
 
@@ -120,8 +120,8 @@ test("exportWebhooksBackup and restoreWebhooks", async () => {
     await writeWebhooks([]); // clear
     await restoreWebhooks([
       { id: "env-2", url: "http://env2", enabled: true, events: [] },
-      { id: "custom-2", url: "http://custom2", enabled: true, events: [] }
-    ] as any[]);
+      { id: "custom-2", url: "http://custom2", enabled: true, events: [] },
+    ] satisfies WebhookConfig[]);
 
     const restored = await readWebhooks();
     assert.equal(restored.length, 1);
