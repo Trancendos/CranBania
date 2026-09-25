@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
-import { registerCardEventSidecar, emitCardEvent, type WebhookPayload } from "./event-bus";
+// WebhookPayload is re-imported by event-bus, not re-exported from it; #18
+// imported it from there, which tsx accepts and `tsc --noEmit` rejects.
+import { registerCardEventSidecar, emitCardEvent } from "./event-bus";
+import type { WebhookPayload } from "../webhooks";
 
 describe("event-bus", () => {
   it("should catch sidecar handler errors", async () => {
@@ -16,12 +19,13 @@ describe("event-bus", () => {
 
     const payload: WebhookPayload = {
       event: "card.in_progress",
+      at: new Date().toISOString(),
       card: {
         id: "test-card-1",
         title: "Test Card",
+        description: "",
+        tags: [],
         cardType: "task",
-        status: "in_progress",
-        createdAt: new Date().toISOString(),
       },
     };
 

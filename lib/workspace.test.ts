@@ -4,8 +4,34 @@ import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import { createSprint, createEpic, getSprintBurndown, readWorkspace } from "./workspace";
+import type { Card } from "./types";
 
 const originalCwd = process.cwd();
+
+// getSprintBurndown takes Card[], and an object literal with three of its
+// twenty fields is not one. The partial literals #23 passed run fine under tsx
+// (which strips types without checking them) and fail `tsc --noEmit`, so the
+// test passed while the repository stopped typechecking.
+let seq = 0;
+function card(overrides: Partial<Card>): Card {
+  seq += 1;
+  const now = new Date().toISOString();
+  return {
+    id: `card-${seq}`,
+    title: `Card ${seq}`,
+    description: "",
+    columnId: "backlog",
+    order: seq,
+    tags: [],
+    cardType: "task",
+    priority: "medium",
+    journal: [],
+    codeChanges: [],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
 
 test("epic and sprint workspace", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "cranbania-ws-"));
@@ -23,8 +49,8 @@ test("epic and sprint workspace", async () => {
     assert.equal(sprint.status, "active");
 
     const burndown = await getSprintBurndown(sprint.id, [
-      { sprintId: sprint.id, columnId: "done", storyPoints: 3 },
-      { sprintId: sprint.id, columnId: "in_progress", storyPoints: 5 },
+      card({ sprintId: sprint.id, columnId: "done", storyPoints: 3 }),
+      card({ sprintId: sprint.id, columnId: "in_progress", storyPoints: 5 }),
     ]);
     assert.ok(burndown);
     assert.equal(burndown!.totalPoints, 8);
