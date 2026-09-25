@@ -1,59 +1,72 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { inProduction } from "./lib/services/auth";
-
-const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+import {
+  SESSION_COOKIE,
+  deriveSessionToken,
+  inProduction,
+  timingSafeEqual,
+} from "./lib/services/auth";
 
 /** Routes that use their own auth (cron secret), not CRANBANIA_API_KEY. Method-scoped to how the route is actually implemented. */
 const CRON_AUTH_EXEMPT: { path: string; method: string }[] = [
   { path: "/api/itsm/sla/check", method: "POST" },
 ];
 
-function extractApiToken(request: NextRequest): string | null {
+/** Routes that must stay reachable unauthenticated, or nobody can ever authenticate. */
+const AUTH_ROUTES = ["/api/auth/login", "/api/auth/logout"];
+
+// Read routes used to be ungated, and the note here explained why: the shipped
+// dashboard calls plain `fetch("/api/...")` with no Authorization header and had
+// no session mechanism, so gating reads would have broken the UI the moment
+// CRANBANIA_API_KEY was set — the exact scenario the key exists for. #35 supplies
+// the missing half: a login page, a session cookie, and a redirect for page
+// requests. With a client that can hold a credential, reads are gated too.
+//
+// The cookie does NOT hold the API key. #35 stored the key itself, which hands
+// every browser the platform's shared secret — a value accepted as
+// `Authorization: Bearer` on every mutating route, by any client. It holds a
+// token derived from the key instead, and the two credentials are checked on
+// separate paths: header/Bearer against the key, cookie against the derived
+// token. A stolen cookie is therefore a browser session and nothing more.
+//
+// An unset key still means "auth disabled", which is correct for local dev and
+// dangerous in production: this service is published at trancendos.com/townhall,
+// so in production a missing key is a misconfiguration and API routes fail
+// *closed* (503) rather than silently open.
+async function isAuthorised(request: NextRequest, apiKey: string): Promise<boolean> {
   const auth = request.headers.get("authorization");
-  if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  return request.headers.get("x-cranbania-api-key");
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+  const header = bearer ?? request.headers.get("x-cranbania-api-key");
+  if (header !== null && timingSafeEqual(header, apiKey)) return true;
+
+  const cookie = request.cookies.get(SESSION_COOKIE);
+  if (cookie) {
+    return timingSafeEqual(cookie.value, await deriveSessionToken(apiKey));
+  }
+  return false;
 }
 
-// NOTE: this only gates *mutating* requests. It intentionally does NOT gate GET/read
-// routes: the shipped browser dashboard (KanbanBoard, WorkspaceBar, IncidentQueue, etc.)
-// calls plain `fetch("/api/...")` with no Authorization header and has no session/cookie
-// mechanism of its own, so gating reads here would break the UI itself the moment
-// CRANBANIA_API_KEY is set in production - the exact scenario the key exists for.
-// Read-route protection needs either a real session/identity layer (this stopgap
-// shared-secret scheme should eventually be replaced by Infinity-One, the platform-wide
-// SSO/"one account, all services" layer) or a network boundary in front of this service,
-// not a middleware header check with no client to send the header.
-//
-// An unset key means "auth disabled", which is correct for local dev and dangerous in
-// production: this service is published at trancendos.com/townhall, so a missing env var
-// would otherwise leave every mutating route open to anyone. In production a missing key
-// is therefore treated as a misconfiguration and mutating routes fail *closed* (503)
-// rather than silently open. Reads are unaffected - they are ungated either way, per the
-// note above.
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const apiKey = process.env.CRANBANIA_API_KEY;
   const { pathname } = request.nextUrl;
-  // Evaluated before the missing-key branch below: these routes authenticate with
-  // CRANBANIA_CRON_SECRET, so CRANBANIA_API_KEY being unset says nothing about whether
-  // they are safe to serve. Gating them on it would 503 the SLA scan on a deployment
-  // that had correctly configured the only secret that route actually uses.
+  const isApi = pathname.startsWith("/api/");
+
+  // Evaluated before the missing-key branch: these routes authenticate with
+  // CRANBANIA_CRON_SECRET, so CRANBANIA_API_KEY being unset says nothing about
+  // whether they are safe to serve. Gating them on it would 503 the SLA scan on
+  // a deployment that had correctly configured the only secret it actually uses.
   const cronExempt = CRON_AUTH_EXEMPT.some(
     (e) => e.path === pathname && e.method === request.method,
   );
+  const authRoute = AUTH_ROUTES.includes(pathname);
 
   if (!apiKey) {
-    if (
-      inProduction() &&
-      pathname.startsWith("/api/") &&
-      MUTATING_METHODS.has(request.method) &&
-      !cronExempt
-    ) {
+    if (inProduction() && isApi && !cronExempt && !authRoute) {
       return NextResponse.json(
         {
           error: "Service misconfigured",
           hint:
-            "CRANBANIA_API_KEY is not set. Mutating API routes are disabled in production " +
+            "CRANBANIA_API_KEY is not set. API routes are disabled in production " +
             "until it is configured.",
         },
         { status: 503 },
@@ -62,24 +75,30 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!pathname.startsWith("/api/")) return NextResponse.next();
-  if (!MUTATING_METHODS.has(request.method)) return NextResponse.next();
-  if (cronExempt) return NextResponse.next();
+  if (cronExempt || authRoute) return NextResponse.next();
 
-  if (extractApiToken(request) !== apiKey) {
+  if (await isAuthorised(request, apiKey)) return NextResponse.next();
+
+  if (isApi) {
     return NextResponse.json(
       {
         error: "Unauthorized",
         hint:
-          "Mutating API routes require Authorization: Bearer $CRANBANIA_API_KEY or header X-CranBania-Api-Key",
+          "API routes require Authorization: Bearer $CRANBANIA_API_KEY, header " +
+          "X-CranBania-Api-Key, or a session cookie from POST /api/auth/login",
       },
       { status: 401 },
     );
   }
 
-  return NextResponse.next();
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  return NextResponse.redirect(url);
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  // `login` alone would also match /loginanything, leaving a page whose name
+  // merely starts with "login" permanently ungated. Anchored to the exact path
+  // and to everything under it.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|login$|login/).*)"],
 };

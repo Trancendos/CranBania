@@ -69,3 +69,61 @@ export function authRequiredResponse(kind: "cron" | "api" = "cron") {
         : "Set Authorization: Bearer $CRANBANIA_API_KEY or X-CranBania-Api-Key",
   };
 }
+
+/** Name of the browser session cookie the dashboard authenticates with. */
+export const SESSION_COOKIE = "cranbania_session";
+
+/**
+ * The session cookie holds a value *derived* from the API key, never the key.
+ *
+ * Storing the key itself would hand every browser that logs in the platform's
+ * shared secret in a cookie the page's own scripts sit beside — and that key is
+ * accepted as `Authorization: Bearer` on every mutating route, by any client,
+ * from anywhere. A derived token is accepted on one path only (the cookie), so
+ * a leaked cookie replays as a browser session and nothing else.
+ *
+ * HMAC-SHA256 over a fixed label, keyed by the API key: one-way, so the cookie
+ * does not yield the key, and stable, so no server-side session store is needed
+ * for what is still a single shared credential. This is a stopgap that should
+ * be replaced by Infinity-One, the platform-wide SSO layer, not a session
+ * system in its own right.
+ *
+ * WebCrypto rather than node:crypto because middleware runs on the Edge
+ * runtime, where `crypto.subtle` is what exists. It is also present in Node 18+,
+ * so the route handlers and the tests use the same function.
+ */
+const SESSION_TOKEN_LABEL = "cranbania-session-v1";
+
+export async function deriveSessionToken(apiKey: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(apiKey),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(SESSION_TOKEN_LABEL),
+  );
+  return Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Constant-time string comparison.
+ *
+ * `===` on a secret returns as soon as two bytes differ, so the time it takes
+ * to reject a guess reports how much of the guess was right. Both values here
+ * are fixed-length hex, so comparing every character costs nothing.
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
