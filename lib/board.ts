@@ -110,6 +110,78 @@ export interface CreateCardInput {
   storyPoints?: number;
 }
 
+
+export async function createCards(inputs: CreateCardInput[]): Promise<Card[]> {
+  const board = await readBoard();
+  const now = new Date().toISOString();
+  const activeSprint = await getActiveSprint();
+  const newCards: Card[] = [];
+
+  for (const input of inputs) {
+    const columnId = input.columnId ?? "backlog";
+    if (!COLUMN_IDS.includes(columnId)) {
+      throw new Error(`Invalid columnId: ${columnId}`);
+    }
+
+    const actor = input.actor ?? "human";
+    const cardType = input.cardType ?? "task";
+    const sprintId = input.sprintId ?? activeSprint?.id;
+    const journal: JournalEntry[] = [
+      createJournalEntry(
+        "created",
+        `Card created in ${columnId} (${cardType})`,
+        actor,
+        { columnId, title: input.title, cardType },
+      ),
+    ];
+    if (sprintId && !input.sprintId && activeSprint) {
+      journal.push(
+        createJournalEntry(
+          "updated",
+          `Auto-assigned to sprint: ${activeSprint.name}`,
+          "system",
+          { sprintId: activeSprint.id },
+        ),
+      );
+    }
+    const card: Card = migrateCard({
+      id: randomUUID(),
+      title: input.title,
+      description: input.description ?? "",
+      columnId,
+      order: nextOrder(board.cards, columnId),
+      assignee: input.assignee,
+      tags: input.tags ?? [],
+      cardType,
+      priority: input.priority,
+      epicId: input.epicId,
+      sprintId,
+      prince2Stage: input.prince2Stage,
+      slaResponseHours: input.slaResponseHours,
+      slaDueAt: input.slaDueAt,
+      storyPoints: input.storyPoints,
+      journal,
+      codeChanges: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    board.cards.push(card);
+    newCards.push(card);
+  }
+
+  if (newCards.length > 0) {
+    await writeBoard(board);
+    for (const card of newCards) {
+      await runSlaBreachCheckForCard(card.id);
+    }
+  }
+
+  // Refetch cards since SLA checks might have modified them
+  const finalBoard = await readBoard();
+  return newCards.map(c => finalBoard.cards.find(fc => fc.id === c.id) ?? c);
+}
+
 export async function createCard(input: CreateCardInput): Promise<Card> {
   const board = await readBoard();
   const columnId = input.columnId ?? "backlog";
@@ -415,6 +487,53 @@ export async function moveCard(
   return (await getCard(id)) ?? updated;
 }
 
+
+export interface AddCommentInput {
+  id: string;
+  message: string;
+  actor?: string;
+}
+
+export async function addComments(inputs: AddCommentInput[]): Promise<(Card | null)[]> {
+  const board = await readBoard();
+  const touched: (string | null)[] = [];
+  let boardModified = false;
+
+  for (const input of inputs) {
+    const index = findCardIndex(board, input.id);
+    if (index === -1) {
+      touched.push(null);
+      continue;
+    }
+
+    const card = board.cards[index];
+    const actor = input.actor ?? "human";
+    board.cards[index] = {
+      ...card,
+      journal: [
+        ...card.journal,
+        createJournalEntry("comment", input.message, actor),
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+    touched.push(input.id);
+    boardModified = true;
+  }
+
+  if (boardModified) {
+    await writeBoard(board);
+  }
+
+  // Resolved after the loop, not inside it. Several inputs naming the same card
+  // is the ordinary case here -- every comment from one workshop lands on one
+  // card -- and pushing each iteration's `updated` returned each caller a card
+  // carrying only the comments added so far, none of them the card that was
+  // written. Every entry now names the state on disk.
+  return touched.map((id) =>
+    id === null ? null : board.cards[findCardIndex(board, id)],
+  );
+}
+
 export async function addComment(
   id: string,
   message: string,
@@ -553,15 +672,18 @@ export async function getPrince2Overview(): Promise<
   Record<Prince2Stage, number>
 > {
   const board = await readBoard();
-  const counts = {} as Record<Prince2Stage, number>;
-  for (const stage of [
-    "starting_up",
-    "initiation",
-    "delivery",
-    "stage_boundary",
-    "closing",
-  ] as Prince2Stage[]) {
-    counts[stage] = board.cards.filter((c) => c.prince2Stage === stage).length;
-  }
-  return counts;
+  const initialCounts: Record<Prince2Stage, number> = {
+    starting_up: 0,
+    initiation: 0,
+    delivery: 0,
+    stage_boundary: 0,
+    closing: 0,
+  };
+
+  return board.cards.reduce((acc, card) => {
+    if (card.prince2Stage && acc[card.prince2Stage] !== undefined) {
+      acc[card.prince2Stage]++;
+    }
+    return acc;
+  }, initialCounts);
 }
