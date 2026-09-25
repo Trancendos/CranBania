@@ -17,6 +17,164 @@ const COLUMN_LABELS: Record<string, string> = {
   done: "Done",
 };
 
+
+function IncidentHeader() {
+  return (
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-[var(--accent)]">ITSM-lite</p>
+        <h1 className="text-3xl font-bold tracking-tight">Incident queue</h1>
+        <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
+          Dedicated view for incident cards — SLA status, priority, and quick
+          triage without Jira or ServiceNow.
+        </p>
+      </div>
+    </header>
+  );
+}
+
+
+function IncidentControls({
+  visibleCount,
+  breachedCount,
+  filter,
+  onFilterChange,
+  onRefresh,
+}: {
+  visibleCount: number;
+  breachedCount: number;
+  filter: "open" | "all";
+  onFilterChange: (val: string) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="flex gap-4 text-sm">
+        <span>Open: {visibleCount}</span>
+        <span className={breachedCount > 0 ? "text-red-400" : ""}>
+          SLA breached: {breachedCount}
+        </span>
+      </div>
+      <label className="flex items-center gap-2 text-xs">
+        Show
+        <select
+          className="rounded border border-[var(--border)] bg-[var(--background)] px-2 py-1"
+          value={filter}
+          onChange={(e) => onFilterChange(e.target.value)}
+        >
+          <option value="open">Open only</option>
+          <option value="all">All incidents</option>
+        </select>
+      </label>
+      <button
+        type="button"
+        onClick={onRefresh}
+        className="rounded border border-[var(--border)] px-3 py-1 text-xs hover:bg-[var(--surface-hover)]"
+      >
+        Refresh
+      </button>
+    </section>
+  );
+}
+
+
+function IncidentTable({
+  visible,
+  moveCard,
+}: {
+  visible: IncidentRow[];
+  moveCard: (id: string, columnId: string) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+      <table className="w-full min-w-[640px] text-left text-sm">
+        <thead className="border-b border-[var(--border)] bg-[var(--surface)] text-xs uppercase text-[var(--muted)]">
+          <tr>
+            <th className="px-4 py-3">Title</th>
+            <th className="px-4 py-3">Priority</th>
+            <th className="px-4 py-3">Column</th>
+            <th className="px-4 py-3">SLA</th>
+            <th className="px-4 py-3">Assignee</th>
+            <th className="px-4 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible
+            .sort((a, b) => {
+              if (a.sla.breached !== b.sla.breached) return a.sla.breached ? -1 : 1;
+              const pa = { critical: 0, high: 1, medium: 2, low: 3 };
+              return pa[a.card.priority] - pa[b.card.priority];
+            })
+            .map(({ card, sla }) => (
+              <tr
+                key={card.id}
+                className="border-b border-[var(--border)] hover:bg-[var(--surface-hover)]"
+              >
+                <td className="px-4 py-3">
+                  <p className="font-medium">{card.title}</p>
+                  {card.description ? (
+                    <p className="mt-0.5 line-clamp-1 text-xs text-[var(--muted)]">
+                      {card.description}
+                    </p>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={
+                      card.priority === "critical"
+                        ? "text-red-400"
+                        : card.priority === "high"
+                          ? "text-amber-400"
+                          : ""
+                    }
+                  >
+                    {card.priority}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-xs">
+                  {COLUMN_LABELS[card.columnId] ?? card.columnId}
+                </td>
+                <td className="px-4 py-3 text-xs">
+                  {sla.resolved ? (
+                    <span className="text-emerald-400">Resolved</span>
+                  ) : sla.breached ? (
+                    <span className="text-red-400">Breached</span>
+                  ) : sla.remainingMs != null ? (
+                    formatSlaRemaining(sla.remainingMs)
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                  {card.assignee ? `@${card.assignee}` : "—"}
+                </td>
+                <td className="px-4 py-3">
+                  {card.columnId !== "in_progress" && card.columnId !== "done" ? (
+                    <button
+                      type="button"
+                      className="rounded bg-[var(--accent)] px-2 py-1 text-xs text-white"
+                      onClick={() => void moveCard(card.id, "in_progress")}
+                    >
+                      Start work
+                    </button>
+                  ) : card.columnId === "in_progress" ? (
+                    <button
+                      type="button"
+                      className="rounded border border-[var(--border)] px-2 py-1 text-xs"
+                      onClick={() => void moveCard(card.id, "review")}
+                    >
+                      → Review
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function IncidentQueue() {
   const [rows, setRows] = useState<IncidentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,43 +216,15 @@ export default function IncidentQueue() {
 
   return (
     <div className="min-h-screen p-6">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-[var(--accent)]">ITSM-lite</p>
-          <h1 className="text-3xl font-bold tracking-tight">Incident queue</h1>
-          <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Dedicated view for incident cards — SLA status, priority, and quick
-            triage without Jira or ServiceNow.
-          </p>
-        </div>
-      </header>
+      <IncidentHeader />
 
-      <section className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-        <div className="flex gap-4 text-sm">
-          <span>Open: {visible.length}</span>
-          <span className={breached > 0 ? "text-red-400" : ""}>
-            SLA breached: {breached}
-          </span>
-        </div>
-        <label className="flex items-center gap-2 text-xs">
-          Show
-          <select
-            className="rounded border border-[var(--border)] bg-[var(--background)] px-2 py-1"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as "open" | "all")}
-          >
-            <option value="open">Open only</option>
-            <option value="all">All incidents</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="rounded border border-[var(--border)] px-3 py-1 text-xs hover:bg-[var(--surface-hover)]"
-        >
-          Refresh
-        </button>
-      </section>
+      <IncidentControls
+        visibleCount={visible.length}
+        breachedCount={breached}
+        filter={filter}
+        onFilterChange={(val) => setFilter(val as "open" | "all")}
+        onRefresh={() => void load()}
+      />
 
       {loading && rows.length === 0 ? (
         <p className="text-[var(--muted)]">Loading incidents…</p>
@@ -103,92 +233,7 @@ export default function IncidentQueue() {
           No incidents in queue. Create an incident card from the Kanban board.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-[var(--border)] bg-[var(--surface)] text-xs uppercase text-[var(--muted)]">
-              <tr>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Priority</th>
-                <th className="px-4 py-3">Column</th>
-                <th className="px-4 py-3">SLA</th>
-                <th className="px-4 py-3">Assignee</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible
-                .sort((a, b) => {
-                  if (a.sla.breached !== b.sla.breached) return a.sla.breached ? -1 : 1;
-                  const pa = { critical: 0, high: 1, medium: 2, low: 3 };
-                  return pa[a.card.priority] - pa[b.card.priority];
-                })
-                .map(({ card, sla }) => (
-                  <tr
-                    key={card.id}
-                    className="border-b border-[var(--border)] hover:bg-[var(--surface-hover)]"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{card.title}</p>
-                      {card.description ? (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-[var(--muted)]">
-                          {card.description}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          card.priority === "critical"
-                            ? "text-red-400"
-                            : card.priority === "high"
-                              ? "text-amber-400"
-                              : ""
-                        }
-                      >
-                        {card.priority}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {COLUMN_LABELS[card.columnId] ?? card.columnId}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {sla.resolved ? (
-                        <span className="text-emerald-400">Resolved</span>
-                      ) : sla.breached ? (
-                        <span className="text-red-400">Breached</span>
-                      ) : sla.remainingMs != null ? (
-                        formatSlaRemaining(sla.remainingMs)
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[var(--muted)]">
-                      {card.assignee ? `@${card.assignee}` : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {card.columnId !== "in_progress" && card.columnId !== "done" ? (
-                        <button
-                          type="button"
-                          className="rounded bg-[var(--accent)] px-2 py-1 text-xs text-white"
-                          onClick={() => void moveCard(card.id, "in_progress")}
-                        >
-                          Start work
-                        </button>
-                      ) : card.columnId === "in_progress" ? (
-                        <button
-                          type="button"
-                          className="rounded border border-[var(--border)] px-2 py-1 text-xs"
-                          onClick={() => void moveCard(card.id, "review")}
-                        >
-                          → Review
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+        <IncidentTable visible={visible} moveCard={moveCard} />
       )}
 
       <footer className="mt-8 text-xs text-[var(--muted)]">

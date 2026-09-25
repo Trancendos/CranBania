@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { addComment, createCard, getCard, updateCard } from "./board";
+import { addComment, addComments, createCards, getCard, updateCard } from "./board";
 import { emitCardEvent } from "./services/event-bus";
 import type { Card } from "./types";
 import { cardToWebhookPayload } from "./webhooks";
@@ -365,12 +365,12 @@ async function createFollowUpCardsFromWorkshop(
   if (!parent) return [];
 
   const actionZones = resolveActionZoneIds(template);
-  const ids: string[] = [];
+  const createInputs: import("./board").CreateCardInput[] = [];
 
   for (const zone of summary.zones) {
     if (!actionZones.includes(zone.zoneId)) continue;
     for (const item of zone.items) {
-      const child = await createCard({
+      createInputs.push({
         title: item.slice(0, 120),
         description: `Follow-up from **${summary.templateName}** (${zone.label}).\n\nParent card: ${parent.title} (${parentCardId})`,
         columnId: "backlog",
@@ -383,13 +383,26 @@ async function createFollowUpCardsFromWorkshop(
         epicId: parent.epicId,
         sprintId: parent.sprintId,
       });
-      await addComment(
-        parentCardId,
-        `[Workshop follow-up created] ${child.title} (${child.id})`,
-        actor,
-      );
-      ids.push(child.id);
     }
+  }
+
+  if (createInputs.length === 0) return [];
+
+  const createdCards = await createCards(createInputs);
+  const ids: string[] = [];
+  const commentInputs: import("./board").AddCommentInput[] = [];
+
+  for (const child of createdCards) {
+    ids.push(child.id);
+    commentInputs.push({
+      id: parentCardId,
+      message: `[Workshop follow-up created] ${child.title} (${child.id})`,
+      actor,
+    });
+  }
+
+  if (commentInputs.length > 0) {
+    await addComments(commentInputs);
   }
 
   return ids;
@@ -477,14 +490,19 @@ export async function recordWorkshopOutcomes(
   if (cardId) {
     card = await getCard(cardId);
     if (card) {
-      for (const zone of summary.zones) {
-        for (const item of zone.items) {
-          await addComment(
-            cardId,
-            `[Workshop · ${summary.templateName} · ${zone.label}] ${item}`,
-            input.actor ?? "agent",
-          );
-        }
+      // #22's win, on #31's signature. One board read and one write for the
+      // whole workshop's output instead of a full read/write per item -- and
+      // atomic, where the loop could leave half the outcomes recorded if it
+      // died partway.
+      const outcomeComments = summary.zones.flatMap((zone) =>
+        zone.items.map((item) => ({
+          id: cardId,
+          message: `[Workshop · ${summary.templateName} · ${zone.label}] ${item}`,
+          actor: input.actor ?? "agent",
+        })),
+      );
+      if (outcomeComments.length > 0) {
+        await addComments(outcomeComments);
       }
 
       if (input.updateDescription !== false) {
@@ -499,7 +517,7 @@ export async function recordWorkshopOutcomes(
       }
 
       if (input.appendTags !== false && card) {
-        const tagSet = new Set((await getCard(cardId))?.tags ?? card.tags ?? []);
+        const tagSet = new Set(card.tags ?? []);
         tagSet.add(`workshop:${summary.templateId}`);
         for (const zone of summary.zones) {
           if (zone.items.length > 0) tagSet.add(`zone:${zone.zoneId}`);

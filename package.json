@@ -11,6 +11,7 @@
     "start": "next start",
     "start:full": "tsx scripts/start-full.ts",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "mcp": "tsx mcp/server.ts",
     "sla:poll": "tsx scripts/sla-poller.ts",
     "sla:poll:once": "tsx scripts/sla-poller.ts --once",

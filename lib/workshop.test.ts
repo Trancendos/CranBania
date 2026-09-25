@@ -30,6 +30,7 @@ test("suggest workshops for incident card prefers analysis templates", () => {
     description: "Need RCA and why analysis for incident",
     cardType: "incident" as const,
     columnId: "backlog" as const,
+    order: 0,
     priority: "high" as const,
     tags: [],
     journal: [],

@@ -2,6 +2,7 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { middleware } from "./middleware";
+import { SESSION_COOKIE, deriveSessionToken } from "./lib/services/auth";
 
 function req(path: string, init?: RequestInit) {
   return new NextRequest(new Request(`http://x${path}`, init));
@@ -40,14 +41,14 @@ function setNodeEnv(value: string | undefined) {
 test("open when CRANBANIA_API_KEY unset (local dev)", async () => {
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("development");
-  const res = middleware(req("/api/board", { method: "GET" }));
+  const res = await middleware(req("/api/board", { method: "GET" }));
   assert.equal(res.status, 200);
 });
 
 test("mutating routes fail closed in production when the key is unset", async () => {
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");
-  const res = middleware(req("/api/cards", { method: "POST" }));
+  const res = await middleware(req("/api/cards", { method: "POST" }));
   assert.equal(res.status, 503);
 });
 
@@ -57,43 +58,54 @@ test("cron-exempt route is not 503'd in production when the API key is unset", a
   // silently stop SLA scans on a correctly configured deployment.
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");
-  const res = middleware(req("/api/itsm/sla/check", { method: "POST" }));
+  const res = await middleware(req("/api/itsm/sla/check", { method: "POST" }));
   assert.equal(res.status, 200);
 });
 
 test("the cron exemption stays method-scoped on the production fail-closed path", async () => {
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");
-  const res = middleware(req("/api/itsm/sla/check", { method: "PUT" }));
+  const res = await middleware(req("/api/itsm/sla/check", { method: "PUT" }));
   assert.equal(res.status, 503);
 });
 
-test("reads stay open in production when the key is unset (no session layer to gate on)", async () => {
+test("reads also fail closed in production when the key is unset", async () => {
+  // Was 200 while there was no session mechanism a browser could use. #35
+  // supplies one, so an unset key in production now denies reads too rather
+  // than leaving every board readable to anyone who finds the URL.
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");
-  const res = middleware(req("/api/board", { method: "GET" }));
-  assert.equal(res.status, 200);
+  const res = await middleware(req("/api/board", { method: "GET" }));
+  assert.equal(res.status, 503);
 });
 
 test("non-API routes are unaffected by the production fail-closed path", async () => {
   delete process.env.CRANBANIA_API_KEY;
   setNodeEnv("production");
-  const res = middleware(req("/board", { method: "POST" }));
+  const res = await middleware(req("/board", { method: "POST" }));
   assert.equal(res.status, 200);
 });
 
-test("GET/read routes stay open even when the key is set (no session mechanism for the browser UI to use)", async () => {
+test("read routes are gated once the key is set", async () => {
   process.env.CRANBANIA_API_KEY = "test-key";
-  const res = middleware(req("/api/board", { method: "GET" }));
-  assert.equal(res.status, 200);
+  const denied = await middleware(req("/api/board", { method: "GET" }));
+  assert.equal(denied.status, 401);
+
+  const allowed = await middleware(
+    req("/api/board", {
+      method: "GET",
+      headers: { Authorization: "Bearer test-key" },
+    }),
+  );
+  assert.equal(allowed.status, 200);
 });
 
 test("mutating routes are gated when the key is set", async () => {
   process.env.CRANBANIA_API_KEY = "test-key";
-  const denied = middleware(req("/api/cards", { method: "POST" }));
+  const denied = await middleware(req("/api/cards", { method: "POST" }));
   assert.equal(denied.status, 401);
 
-  const allowed = middleware(
+  const allowed = await middleware(
     req("/api/cards", {
       method: "POST",
       headers: { Authorization: "Bearer test-key" },
@@ -104,7 +116,7 @@ test("mutating routes are gated when the key is set", async () => {
 
 test("cron-secret POST route is exempt from CRANBANIA_API_KEY", async () => {
   process.env.CRANBANIA_API_KEY = "test-key";
-  const res = middleware(req("/api/itsm/sla/check", { method: "POST" }));
+  const res = await middleware(req("/api/itsm/sla/check", { method: "POST" }));
   assert.equal(res.status, 200);
 });
 
@@ -112,12 +124,65 @@ test("the cron exemption is scoped to POST, not the whole path", async () => {
   process.env.CRANBANIA_API_KEY = "test-key";
   // No handler actually exports PUT for this route (Next 405s it downstream), but the
   // middleware itself must not blanket-exempt the path regardless of method.
-  const res = middleware(req("/api/itsm/sla/check", { method: "PUT" }));
+  const res = await middleware(req("/api/itsm/sla/check", { method: "PUT" }));
   assert.equal(res.status, 401);
 });
 
-test("non-API routes are never gated", async () => {
+test("an unauthenticated page request is redirected to the login page", async () => {
   process.env.CRANBANIA_API_KEY = "test-key";
-  const res = middleware(req("/board", { method: "GET" }));
+  const res = await middleware(req("/board", { method: "GET" }));
+  assert.equal(res.status, 307);
+  assert.equal(new URL(res.headers.get("location")!).pathname, "/login");
+});
+
+test("the session cookie authenticates, and it is not the API key", async () => {
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const token = await deriveSessionToken("test-key");
+  assert.notEqual(token, "test-key");
+
+  const allowed = await middleware(
+    req("/api/board", {
+      method: "GET",
+      headers: { cookie: `${SESSION_COOKIE}=${token}` },
+    }),
+  );
+  assert.equal(allowed.status, 200);
+});
+
+test("a cookie holding the API key itself is refused", async () => {
+  // This is what #35 shipped: the cookie WAS the key. Any client holding it
+  // could send it as `Authorization: Bearer` on every mutating route. The two
+  // credentials are checked on separate paths now, so the key is not a session
+  // and a session is not the key.
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const res = await middleware(
+    req("/api/board", {
+      method: "GET",
+      headers: { cookie: `${SESSION_COOKIE}=test-key` },
+    }),
+  );
+  assert.equal(res.status, 401);
+});
+
+test("a session cookie is not accepted as a Bearer token", async () => {
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const token = await deriveSessionToken("test-key");
+  const res = await middleware(
+    req("/api/cards", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+  );
+  assert.equal(res.status, 401);
+});
+
+test("the login route stays reachable unauthenticated, or nobody can log in", async () => {
+  process.env.CRANBANIA_API_KEY = "test-key";
+  const res = await middleware(req("/api/auth/login", { method: "POST" }));
   assert.equal(res.status, 200);
+});
+
+test("the derived token is stable, so no server-side session store is needed", async () => {
+  assert.equal(await deriveSessionToken("k"), await deriveSessionToken("k"));
+  assert.notEqual(await deriveSessionToken("k"), await deriveSessionToken("k2"));
 });
