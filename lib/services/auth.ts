@@ -113,17 +113,43 @@ export async function deriveSessionToken(apiKey: string): Promise<string> {
 }
 
 /**
- * Constant-time string comparison.
+ * Constant-time comparison of two secrets, over their SHA-256 digests.
  *
- * `===` on a secret returns as soon as two bytes differ, so the time it takes
- * to reject a guess reports how much of the guess was right. Both values here
- * are fixed-length hex, so comparing every character costs nothing.
+ * Three reviewers in a row caught the same thing here, each one level further
+ * in, which is worth recording because the first two fixes both looked right:
+ *
+ *   1. `===` returns at the first differing byte, so rejection time reports how
+ *      much of a guess was correct.
+ *   2. Replacing it with a loop that kept `if (a.length !== b.length) return
+ *      false` moved the leak rather than removing it: the early return reports
+ *      the secret's length.
+ *   3. Removing *that* and looping to `Math.max(a.length, b.length)` still
+ *      leaks, because when the guess is shorter than the key the loop runs for
+ *      the key's length. The iteration count was still a function of the
+ *      secret. (sourcery-ai, chatgpt-codex-connector, llamapreview)
+ *
+ * Hashing both sides first ends the argument: SHA-256 is always 32 bytes, so
+ * the comparison loop runs exactly 32 times whatever either input was. The
+ * only remaining input-dependent work is digesting the caller's own candidate,
+ * whose length the caller already knows.
+ *
+ * A fixed span like 256 was suggested and is not equivalent: it still leaks for
+ * inputs longer than the span, and it invites an attacker to send a megabyte.
+ *
+ * WebCrypto because middleware runs on the Edge runtime; `crypto.subtle` exists
+ * there and in Node 18+, so routes, middleware and tests share one function.
  */
-export function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
+export async function secretsMatch(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(a)),
+    crypto.subtle.digest("SHA-256", encoder.encode(b)),
+  ]);
+  const x = new Uint8Array(da);
+  const y = new Uint8Array(db);
   let diff = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < x.length; i += 1) {
+    diff |= x[i] ^ y[i];
   }
   return diff === 0;
 }
