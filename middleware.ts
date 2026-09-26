@@ -4,7 +4,7 @@ import {
   SESSION_COOKIE,
   deriveSessionToken,
   inProduction,
-  timingSafeEqual,
+  secretsMatch,
 } from "./lib/services/auth";
 
 /** Routes that use their own auth (cron secret), not CRANBANIA_API_KEY. Method-scoped to how the route is actually implemented. */
@@ -46,11 +46,11 @@ async function isAuthorised(request: NextRequest, apiKey: string): Promise<boole
   const auth = request.headers.get("authorization");
   const bearer = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
   const header = bearer ?? request.headers.get("x-cranbania-api-key");
-  if (header !== null && timingSafeEqual(header, apiKey)) return true;
+  if (header !== null && (await secretsMatch(header, apiKey))) return true;
 
   const cookie = request.cookies.get(SESSION_COOKIE);
   if (cookie) {
-    return timingSafeEqual(cookie.value, await deriveSessionToken(apiKey));
+    return secretsMatch(cookie.value, await deriveSessionToken(apiKey));
   }
   return false;
 }

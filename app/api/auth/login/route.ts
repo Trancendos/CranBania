@@ -5,7 +5,7 @@ import {
   deriveSessionToken,
   getApiKey,
   inProduction,
-  timingSafeEqual,
+  secretsMatch,
 } from "@/lib/services/auth";
 
 export async function POST(request: NextRequest) {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Expected { apiKey: string }" }, { status: 400 });
   }
 
-  if (!timingSafeEqual(submitted, apiKey)) {
+  if (!(await secretsMatch(submitted, apiKey))) {
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 

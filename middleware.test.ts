@@ -2,7 +2,7 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { middleware } from "./middleware";
-import { SESSION_COOKIE, deriveSessionToken, timingSafeEqual } from "./lib/services/auth";
+import { SESSION_COOKIE, deriveSessionToken, secretsMatch } from "./lib/services/auth";
 
 function req(path: string, init?: RequestInit) {
   return new NextRequest(new Request(`http://x${path}`, init));
@@ -212,13 +212,31 @@ test("the health probe is the only read route left open", async () => {
   }
 });
 
-test("timingSafeEqual does not report the secret's length", async () => {
-  // It compares a login body against CRANBANIA_API_KEY, whose length is not
-  // fixed, so returning early on a length mismatch leaked it. (sourcery-ai)
-  assert.equal(timingSafeEqual("abc", "abc"), true);
-  assert.equal(timingSafeEqual("abc", "abd"), false);
-  assert.equal(timingSafeEqual("abc", "abcd"), false);
-  assert.equal(timingSafeEqual("abcd", "abc"), false);
-  assert.equal(timingSafeEqual("", ""), true);
-  assert.equal(timingSafeEqual("", "a"), false);
+test("secretsMatch compares secrets without reporting their length", async () => {
+  // Three reviewers caught this in sequence: `===` leaks the matching prefix,
+  // an early length return leaks the length, and a Math.max span still runs
+  // for the key's length when the guess is shorter. Hashing first makes the
+  // comparison exactly 32 bytes whatever the inputs were.
+  assert.equal(await secretsMatch("abc", "abc"), true);
+  assert.equal(await secretsMatch("abc", "abd"), false);
+  assert.equal(await secretsMatch("abc", "abcd"), false);
+  assert.equal(await secretsMatch("abcd", "abc"), false);
+  assert.equal(await secretsMatch("", ""), true);
+  assert.equal(await secretsMatch("", "a"), false);
+  // A long candidate against a short key is the case Math.max got wrong.
+  assert.equal(await secretsMatch("x".repeat(10000), "short-key"), false);
+  assert.equal(await secretsMatch("short-key", "x".repeat(10000)), false);
+});
+
+test("secretsMatch compares a fixed 32 bytes regardless of input length", async () => {
+  // The property, not the timing: a digest comparison cannot depend on either
+  // input's length, so equal inputs match and unequal ones do not at every
+  // size. A timing assertion here would measure the runner, not the code.
+  for (const [a, b] of [
+    ["k", "k"],
+    ["k".repeat(1000), "k".repeat(1000)],
+    ["k".repeat(1000), "k".repeat(999)],
+  ] as const) {
+    assert.equal(await secretsMatch(a, b), a === b);
+  }
 });
