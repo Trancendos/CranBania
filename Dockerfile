@@ -64,7 +64,7 @@ USER nextjs
 EXPOSE 8071
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-  CMD wget --spider -q http://localhost:8071/api/board || exit 1
+  CMD wget --spider -q http://localhost:8071/api/health || exit 1
 
 # server.js is emitted by Next.js standalone output
 CMD ["node", "server.js"]

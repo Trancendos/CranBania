@@ -4,7 +4,7 @@ import {
   SESSION_COOKIE,
   deriveSessionToken,
   inProduction,
-  timingSafeEqual,
+  secretsMatch,
 } from "./lib/services/auth";
 
 /** Routes that use their own auth (cron secret), not CRANBANIA_API_KEY. Method-scoped to how the route is actually implemented. */
@@ -14,6 +14,15 @@ const CRON_AUTH_EXEMPT: { path: string; method: string }[] = [
 
 /** Routes that must stay reachable unauthenticated, or nobody can ever authenticate. */
 const AUTH_ROUTES = ["/api/auth/login", "/api/auth/logout"];
+
+/**
+ * The container liveness probe, which runs with no credential and must not be
+ * gated. The Dockerfile's HEALTHCHECK pointed at `/api/board`, which only ever
+ * worked because read routes were ungated; gating them made every container
+ * report unhealthy while serving traffic normally. `/api/health` reads nothing
+ * and returns a fixed shape, so leaving it open discloses nothing.
+ */
+const PUBLIC_ROUTES = ["/api/health"];
 
 // Read routes used to be ungated, and the note here explained why: the shipped
 // dashboard calls plain `fetch("/api/...")` with no Authorization header and had
@@ -37,11 +46,11 @@ async function isAuthorised(request: NextRequest, apiKey: string): Promise<boole
   const auth = request.headers.get("authorization");
   const bearer = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
   const header = bearer ?? request.headers.get("x-cranbania-api-key");
-  if (header !== null && timingSafeEqual(header, apiKey)) return true;
+  if (header !== null && (await secretsMatch(header, apiKey))) return true;
 
   const cookie = request.cookies.get(SESSION_COOKIE);
   if (cookie) {
-    return timingSafeEqual(cookie.value, await deriveSessionToken(apiKey));
+    return secretsMatch(cookie.value, await deriveSessionToken(apiKey));
   }
   return false;
 }
@@ -58,7 +67,7 @@ export async function middleware(request: NextRequest) {
   const cronExempt = CRON_AUTH_EXEMPT.some(
     (e) => e.path === pathname && e.method === request.method,
   );
-  const authRoute = AUTH_ROUTES.includes(pathname);
+  const authRoute = AUTH_ROUTES.includes(pathname) || PUBLIC_ROUTES.includes(pathname);
 
   if (!apiKey) {
     if (inProduction() && isApi && !cronExempt && !authRoute) {
